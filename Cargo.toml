@@ -1,0 +1,10 @@
+[package]
+name = "dummy_xml"
+version = "0.1.0"
+authors = ["vietto"]
+
+[dependencies]
+time = "*"
+
+[profile.test]
+opt-level = 3
