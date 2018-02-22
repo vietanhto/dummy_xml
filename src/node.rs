@@ -1,5 +1,6 @@
 use attribute::Attribute;
 
+#[derive(Debug)]
 pub struct Node {
     name: String,
     next: Option<Box<Node>>,
@@ -10,6 +11,16 @@ pub struct Node {
 
 impl Node {
     pub fn new(name: String) -> Node {
-        Node{name: name, next: None, prev: None, first_attr: None, last_attr: None}
+        Node {
+            name: name,
+            next: None,
+            prev: None,
+            first_attr: None,
+            last_attr: None,
+        }
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
     }
 }

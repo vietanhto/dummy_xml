@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct Attribute {
     name: String,
     value: String,
@@ -7,7 +8,12 @@ pub struct Attribute {
 
 impl Attribute {
     fn new(name: String, value: String) -> Attribute {
-        Attribute{name: name, value: value, next: None, prev: None}
+        Attribute {
+            name: name,
+            value: value,
+            next: None,
+            prev: None,
+        }
     }
 
     fn name(&self) -> &String {
@@ -38,7 +44,6 @@ impl Attribute {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn new_object_test() {

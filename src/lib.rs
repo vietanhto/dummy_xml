@@ -1,7 +1,7 @@
-mod attribute;
-mod node;
-mod document;
-mod parser;
+pub mod attribute;
+pub mod node;
+pub mod document;
+pub mod parser;
 
 use attribute::Attribute;
 use node::Node;
@@ -19,11 +19,11 @@ fn parse(contents: String) -> Document {
         match c {
             '<' => {
                 head = i + 1;
-            },
+            }
             '>' => {
                 tail = i;
                 action = true;
-            },
+            }
             _ => (),
         }
         if action {
