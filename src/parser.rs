@@ -19,7 +19,7 @@ impl Parser {
     }
 
     pub fn parse(&self, contents: &[u8]) -> Document {
-        let mut tag_stack: LinkedList<Node> = LinkedList::new();
+        let mut tag_stack: LinkedList<Box<Node>> = LinkedList::new();
         let mut state = State::Start;
         let mut i = 0;
 
@@ -45,13 +45,21 @@ impl Parser {
                     i += 1; // skip first '<'
                     if contents[i] == SLASH {
                         //end tag
-                        while i < contents.len() && !is_space(contents[i])
-                            && contents[i] != GREATER_THAN
-                        {
+                        i += 1;
+                        while i < contents.len() && contents[i] != GREATER_THAN {
                             i += 1;
                         }
+                        i += 1;
+                        tag_stack.pop_back();
 
-                        State::ReadTag
+                        if i >= contents.len() {
+                            State::End
+                        } else {
+                            match contents[i] {
+                                GREATER_THAN => State::ReadTag,
+                                _ => State::ReadContent,
+                            }
+                        }
                     } else {
                         //open tag
                         let start = i;
@@ -61,8 +69,14 @@ impl Parser {
                             i += 1;
                         }
                         let tag_name = String::from_utf8(contents[start..i].to_vec()).unwrap();
-                        let tag = Node::new(tag_name);
-                        tag_stack.push_back(tag);
+                        let mut tag = Box::new(Node::new(tag_name));
+                        let mut old_tag = tag_stack.pop_back();
+                        match old_tag {
+                            Some(mut boxed_tag) => {
+                                tag.set_next(Some(boxed_tag));
+                            }
+                            None => (),
+                        }
                         println!("{:?}", tag_stack.back());
 
                         State::ReadAttribute
@@ -86,11 +100,7 @@ impl Parser {
                         i += 1;
                     }
 
-                    if i >= contents.len() {
-                        State::End
-                    } else {
-                        State::ReadTag
-                    }
+                    State::ReadTag
                 }
                 State::End => {
                     break;

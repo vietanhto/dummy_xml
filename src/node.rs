@@ -23,4 +23,20 @@ impl Node {
     pub fn name(&self) -> &String {
         &self.name
     }
+
+    pub fn next(&self) -> &Option<Box<Node>> {
+        &self.next
+    }
+
+    pub fn set_next(&mut self, value: Option<Box<Node>>) {
+        self.next = value;
+    }
+
+    pub fn prev(&self) -> &Option<Box<Node>> {
+        &self.prev
+    }
+
+    pub fn set_prev(&mut self, value: Option<Box<Node>>) {
+        self.prev = value;
+    }
 }
