@@ -1,12 +1,10 @@
-use std::cell::{Ref, RefCell, RefMut};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Attribute {
     name: String,
     value: String,
-    next: Option<Rc<RefCell<Attribute>>>,
-    prev: Option<Rc<RefCell<Attribute>>>,
 }
 
 impl Attribute {
@@ -14,8 +12,6 @@ impl Attribute {
         Rc::new(RefCell::new(Attribute {
             name: name,
             value: value,
-            next: None,
-            prev: None,
         }))
     }
 
@@ -27,20 +23,18 @@ impl Attribute {
         &self.value
     }
 
-    pub fn next(&self) -> Option<Ref<Self>> {
-        self.next.as_ref().map(|attr| attr.borrow())
+    pub fn set_name(&mut self, name: String) {
+        self.name = name;
     }
 
-    pub fn set_next(&mut self, value: Option<Rc<RefCell<Self>>>) {
-        self.next = value;
+    pub fn set_value(&mut self, value: String) {
+        self.value = value;
     }
+}
 
-    pub fn prev(&self) -> Option<Ref<Self>> {
-        self.prev.as_ref().map(|attr| attr.borrow())
-    }
-
-    pub fn set_prev(&mut self, value: Option<Rc<RefCell<Self>>>) {
-        self.prev = value;
+impl PartialEq for Attribute {
+    fn eq(&self, other: &Attribute) -> bool {
+        self.name == other.name && self.value == other.value
     }
 }
 
@@ -51,17 +45,21 @@ mod tests {
     #[test]
     fn new_object_test() {
         let attr = Attribute::new("class".to_string(), "test".to_string());
-        assert_eq!(attr.borrow().name(), "class");
-        assert_eq!(attr.borrow().value(), "test");
 
-        let attr2 = Attribute::new("id".to_string(), "main".to_string());
+        //borrow_mut
+        {
+            let mut attr = attr.borrow_mut();
+            assert_eq!(attr.name(), "class");
+            assert_eq!(attr.value(), "test");
 
-        attr.borrow_mut().set_next(Some(attr2));
+            attr.set_name("id".to_string());
+            attr.set_value("main".to_string());
+        }
 
-        let attr = attr.borrow();
-        let attr2 = attr.next().unwrap();
-
-        assert_eq!(attr2.name(), "id");
-        assert_eq!(attr2.value(), "main");
+        //borrow
+        {
+            let attr2 = attr.clone();
+            assert_eq!(attr, attr2);
+        }
     }
 }

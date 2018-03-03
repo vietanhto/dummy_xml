@@ -1,7 +1,9 @@
-use std::collections::LinkedList;
+use std::cell::{Ref, RefCell, RefMut};
+use std::rc::Rc;
 
 use document::Document;
 use node::Node;
+use node::XmlNode;
 
 pub struct Parser {}
 
@@ -19,7 +21,8 @@ impl Parser {
     }
 
     pub fn parse(&self, contents: &[u8]) -> Document {
-        let mut tag_stack: LinkedList<Box<Node>> = LinkedList::new();
+        let mut current_parent: Option<Rc<RefCell<Node>>> = None;
+        let mut root: Option<Rc<RefCell<Node>>> = None;
         let mut state = State::Start;
         let mut i = 0;
 
@@ -27,6 +30,8 @@ impl Parser {
         const GREATER_THAN: u8 = '>' as u8;
         const SLASH: u8 = '/' as u8;
         const EQUAL: u8 = '=' as u8;
+        const EXCLAMATION_MARK: u8 = '!' as u8;
+        const QUESTION_MARK: u8 = '?' as u8;
 
         loop {
             state = match state {
@@ -46,11 +51,18 @@ impl Parser {
                     if contents[i] == SLASH {
                         //end tag
                         i += 1;
-                        while i < contents.len() && contents[i] != GREATER_THAN {
+                        while i < contents.len() && contents[i] != LESS_THAN {
                             i += 1;
                         }
-                        i += 1;
-                        tag_stack.pop_back();
+                        current_parent = match current_parent.take() {
+                            Some(old_parent) => {
+                                let mut old_parent = old_parent.borrow_mut();
+                                let current_parent =
+                                    old_parent.parent_mut().map(|node| node.clone_rc());
+                                current_parent
+                            }
+                            None => None,
+                        };
 
                         if i >= contents.len() {
                             State::End
@@ -60,6 +72,11 @@ impl Parser {
                                 _ => State::ReadContent,
                             }
                         }
+                    } else if contents[i] == EXCLAMATION_MARK || contents[i] == QUESTION_MARK {
+                        while i < contents.len() && contents[i] != LESS_THAN {
+                            i += 1;
+                        }
+                        State::ReadTag
                     } else {
                         //open tag
                         let start = i;
@@ -69,15 +86,23 @@ impl Parser {
                             i += 1;
                         }
                         let tag_name = String::from_utf8(contents[start..i].to_vec()).unwrap();
-                        let mut tag = Box::new(Node::new(tag_name));
-                        let mut old_tag = tag_stack.pop_back();
-                        match old_tag {
-                            Some(mut boxed_tag) => {
-                                tag.set_next(Some(boxed_tag));
+                        println!("{} {} {:?}", start, i, tag_name);
+                        current_parent = match current_parent.take() {
+                            Some(old_parent) => {
+                                let mut old_parent = old_parent.borrow_mut();
+                                old_parent.append_child(tag_name);
+                                let current_parent =
+                                    Some(old_parent.last_child().unwrap().clone_rc());
+                                current_parent
                             }
-                            None => (),
-                        }
-                        println!("{:?}", tag_stack.back());
+                            None => {
+                                //first tag
+                                let current_parent = Node::new(tag_name);
+                                root = Some(current_parent.clone());
+                                Some(current_parent)
+                            }
+                        };
+                        // tag_stack.push_back(node);
 
                         State::ReadAttribute
                     }
@@ -107,6 +132,7 @@ impl Parser {
                 }
             };
         }
+        println!("This is root {:?}", root);
         Document::new()
     }
 }
