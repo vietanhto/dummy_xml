@@ -1,17 +1,14 @@
 pub mod attribute;
 pub mod node;
-pub mod document;
 pub mod parser;
 
 use attribute::Attribute;
 use node::Node;
-use document::Document;
+use parser::Document;
 
 extern crate time;
 
-fn parse(contents: String) -> Document {
-    let mut result = Document::new();
-
+fn parse(contents: String) {
     let mut head = 0;
     let mut tail = 0;
     let mut action = false;
@@ -31,8 +28,6 @@ fn parse(contents: String) -> Document {
             action = false;
         }
     }
-
-    result
 }
 
 #[cfg(test)]

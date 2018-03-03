@@ -6,8 +6,21 @@ use attribute::Attribute;
 
 type Link<T> = Option<Rc<RefCell<T>>>;
 
+#[derive(Debug)]
+pub enum NodeType {
+    Element,
+    PcData,                //<node> text1 <child/> text2 </node>
+    CData,                 //<node> <![CDATA[text1]]> <child/> <![CDATA[text2]]> </node> -> done
+    Comment,               //<!-- comment text -->
+    ProcessingInstruction, //?name value?>
+    Declaration,           //<?xml version="1.0"?>
+    Doctype,               //<!DOCTYPE greeting [ <!ELEMENT greeting (#PCDATA)> ]>
+}
+
 pub struct Node {
     name: String,
+    node_type: NodeType,
+    value: String,
     me: Link<Node>,
     next: Link<Node>,
     parent: Link<Node>,
@@ -18,36 +31,12 @@ pub struct Node {
     last_attr: Link<Attribute>,
 }
 
-pub trait XmlNode {
-    fn name(&self) -> &String;
-    fn next_sibling(&self) -> Option<Ref<Self>>;
-    fn previous_sibling(&self) -> Option<Ref<Self>>;
-    fn parent(&self) -> Option<Ref<Self>>;
-    fn parent_mut(&mut self) -> Option<RefMut<Self>>;
-    fn first_child(&self) -> Option<Ref<Self>>;
-    fn last_child(&self) -> Option<Ref<Self>>;
-    fn clone_rc(&self) -> Rc<RefCell<Self>>;
-    // fn next_sibling(&self) -> Ref<Self>;
-    // fn previous_sibling(&self) -> Ref<Self>;
-    // xml_attribute xml_node::append_attribute(const char_t* name);
-    // xml_attribute xml_node::prepend_attribute(const char_t* name);
-    // xml_attribute xml_node::insert_attribute_after(const char_t* name, const xml_attribute& attr);
-    // xml_attribute xml_node::insert_attribute_before(const char_t* name, const xml_attribute& attr);
-    fn append_child(&mut self, name: String);
-    // xml_node xml_node::prepend_child(xml_node_type type = node_element);
-    // xml_node xml_node::insert_child_after(xml_node_type type, const xml_node& node);
-    // xml_node xml_node::insert_child_before(xml_node_type type, const xml_node& node);
-
-    // xml_node xml_node::append_child(const char_t* name);
-    // xml_node xml_node::prepend_child(const char_t* name);
-    // xml_node xml_node::insert_child_after(const char_t* name, const xml_node& node);
-    // xml_node xml_node::insert_child_before(const char_t* name, const xml_node& node);
-}
-
 impl Node {
     pub fn new(name: String) -> Rc<RefCell<Node>> {
         let node = Rc::new(RefCell::new(Node {
             name: name,
+            node_type: NodeType::Element,
+            value: String::from(""),
             me: None,
             next: None,
             prev: None,
@@ -61,53 +50,90 @@ impl Node {
         node
     }
 
-    // pub fn name(&self) -> &String {
-    //     &self.name
-    // }
+    pub fn new_by_type(node_type: NodeType) -> Rc<RefCell<Node>> {
+        let node = Rc::new(RefCell::new(Node {
+            name: String::from(""),
+            node_type: node_type,
+            value: String::from(""),
+            me: None,
+            next: None,
+            prev: None,
+            parent: None,
+            first_child: None,
+            last_child: None,
+            first_attr: None,
+            last_attr: None,
+        }));
+        node.borrow_mut().me = Some(node.clone());
+        node
+    }
 
-    // pub fn next(&self) -> Option<Ref<Node>> {
-    //     self.next.as_ref().map(|node| node.borrow())
-    // }
-
-    // pub fn set_next(&mut self, value: Link<Node>) {
-    //     self.next = value;
-    // }
-
-    // pub fn prev(&self) -> Option<Ref<Node>> {
-    //     self.prev.as_ref().map(|node| node.borrow())
-    // }
-
-    // pub fn set_prev(&mut self, value: Link<Node>) {
-    //     self.prev = value;
-    // }
-}
-
-impl XmlNode for Node {
-    fn name(&self) -> &String {
+    pub fn name(&self) -> &String {
         &self.name
     }
 
-    fn next_sibling(&self) -> Option<Ref<Self>> {
+    pub fn set_name(&mut self, name: String) -> &mut Self {
+        self.name = name;
+        self
+    }
+
+    pub fn value(&self) -> &String {
+        &self.value
+    }
+
+    pub fn set_value(&mut self, value: String) -> &mut Self {
+        self.value = value;
+        self
+    }
+
+    pub fn next_sibling(&self) -> Option<Ref<Self>> {
         self.next.as_ref().map(|node| node.borrow())
     }
 
-    fn previous_sibling(&self) -> Option<Ref<Self>> {
+    pub fn next_sibling_mut(&mut self) -> Option<RefMut<Self>> {
+        self.next.as_mut().map(|node| node.borrow_mut())
+    }
+
+    pub fn previous_sibling(&self) -> Option<Ref<Self>> {
         self.prev.as_ref().map(|node| node.borrow())
     }
 
-    fn parent(&self) -> Option<Ref<Self>> {
+    pub fn previous_sibling_mut(&mut self) -> Option<RefMut<Self>> {
+        self.prev.as_mut().map(|node| node.borrow_mut())
+    }
+
+    pub fn parent(&self) -> Option<Ref<Self>> {
         self.parent.as_ref().map(|node| node.borrow())
     }
 
-    fn parent_mut(&mut self) -> Option<RefMut<Self>> {
+    pub fn parent_mut(&mut self) -> Option<RefMut<Self>> {
         self.parent.as_mut().map(|node| node.borrow_mut())
     }
 
-    fn clone_rc(&self) -> Rc<RefCell<Self>> {
-        return self.me.clone().unwrap();
+    pub fn first_child(&self) -> Option<Ref<Self>> {
+        self.first_child.as_ref().map(|node| node.borrow())
     }
 
-    fn append_child(&mut self, name: String) {
+    pub fn first_child_mut(&mut self) -> Option<RefMut<Self>> {
+        self.first_child.as_mut().map(|node| node.borrow_mut())
+    }
+
+    pub fn last_child(&self) -> Option<Ref<Self>> {
+        self.last_child.as_ref().map(|node| node.borrow())
+    }
+
+    pub fn last_child_mut(&mut self) -> Option<RefMut<Self>> {
+        self.last_child.as_mut().map(|node| node.borrow_mut())
+    }
+
+    pub fn clone_rc(&self) -> Rc<RefCell<Self>> {
+        return self.me.clone().unwrap();
+    }
+    // xml_attribute xml_node::append_attribute(const char_t* name);
+    // xml_attribute xml_node::prepend_attribute(const char_t* name);
+    // xml_attribute xml_node::insert_attribute_after(const char_t* name, const xml_attribute& attr);
+    // xml_attribute xml_node::insert_attribute_before(const char_t* name, const xml_attribute& attr);
+    pub fn append_child(&mut self, name: String) -> Rc<RefCell<Node>> {
         let node = Node::new(name);
 
         match self.last_child.take() {
@@ -122,20 +148,75 @@ impl XmlNode for Node {
             }
         }
         node.borrow_mut().parent = self.me.clone();
+        node
     }
 
-    fn first_child(&self) -> Option<Ref<Self>> {
-        self.first_child.as_ref().map(|node| node.borrow())
+    pub fn prepend_child(&mut self, name: String) -> Rc<RefCell<Node>> {
+        let node = Node::new(name);
+
+        match self.first_child.take() {
+            Some(first_child) => {
+                node.borrow_mut().next = Some(first_child.clone());
+                first_child.borrow_mut().prev = Some(node.clone());
+                self.first_child = Some(node.clone());
+            }
+            None => {
+                self.first_child = Some(node.clone());
+                self.last_child = Some(node.clone())
+            }
+        }
+        node.borrow_mut().parent = self.me.clone();
+        node
     }
 
-    fn last_child(&self) -> Option<Ref<Self>> {
-        self.last_child.as_ref().map(|node| node.borrow())
+    pub fn append_child_by_type(&mut self, node_type: NodeType) -> Rc<RefCell<Node>> {
+        let node = Node::new_by_type(node_type);
+
+        match self.last_child.take() {
+            Some(last_child) => {
+                node.borrow_mut().prev = Some(last_child.clone());
+                last_child.borrow_mut().next = Some(node.clone());
+                self.last_child = Some(node.clone());
+            }
+            None => {
+                self.last_child = Some(node.clone());
+                self.first_child = Some(node.clone())
+            }
+        }
+        node.borrow_mut().parent = self.me.clone();
+        node
     }
+
+    pub fn prepend_child_by_type(&mut self, node_type: NodeType) -> Rc<RefCell<Node>> {
+        let node = Node::new_by_type(node_type);
+
+        match self.first_child.take() {
+            Some(first_child) => {
+                node.borrow_mut().next = Some(first_child.clone());
+                first_child.borrow_mut().prev = Some(node.clone());
+                self.first_child = Some(node.clone());
+            }
+            None => {
+                self.first_child = Some(node.clone());
+                self.last_child = Some(node.clone())
+            }
+        }
+        node.borrow_mut().parent = self.me.clone();
+        node
+    }
+
+    // xml_node xml_node::prepend_child(const char_t* name);
+    // xml_node xml_node::insert_child_before(xml_node_type type, const xml_node& node);
+    // xml_node xml_node::insert_child_after(const char_t* name, const xml_node& node);
+    // xml_node xml_node::insert_child_before(const char_t* name, const xml_node& node);
+    // typedef xml_node_iterator iterator;
+    // iterator begin() const;
+    // iterator end() const;
 }
 
 impl fmt::Debug for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.name)
+        write!(f, "{:?} {:?} {:?}", self.name, self.value, self.node_type)
     }
 }
 
@@ -150,14 +231,33 @@ mod tests {
         node.borrow_mut().append_child("child1".to_string());
         node.borrow_mut().append_child("child2".to_string());
 
-        let node = node.borrow();
-        let c1 = node.first_child().unwrap();
-        assert_eq!(c1.name(), "child1");
+        {
+            let node = node.borrow();
+            let c1 = node.first_child().unwrap();
+            assert_eq!(c1.name(), "child1");
 
-        let c2 = c1.next_sibling().unwrap();
-        assert_eq!(c2.name(), "child2");
+            let c2 = c1.next_sibling().unwrap();
+            assert_eq!(c2.name(), "child2");
 
-        let node = c2.parent().unwrap();
-        assert_eq!(node.name(), "mpd");
+            let node = c2.parent().unwrap();
+            assert_eq!(node.name(), "mpd");
+        }
+
+        node.borrow_mut().prepend_child("child0".to_string());
+
+        {
+            let node = node.borrow();
+            let c1 = node.first_child().unwrap();
+            assert_eq!(c1.name(), "child0");
+        }
+
+        let txt_node = node.borrow_mut().append_child_by_type(NodeType::PcData);
+        txt_node.borrow_mut().set_value("text1".to_string());
+
+        {
+            let node = node.borrow();
+            let txt = node.last_child().unwrap();
+            assert_eq!(txt.value(), "text1");
+        }
     }
 }
