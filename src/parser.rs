@@ -1,17 +1,10 @@
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::Rc;
 
-use node::Node;
-use node::NodeType;
+use node::{Node, NodeType};
 
 pub struct Document {
     root: Rc<RefCell<Node>>,
-}
-
-impl Document {
-    fn root(&self) -> Ref<Node> {
-        self.root.borrow()
-    }
 }
 
 pub struct Parser {}
@@ -37,6 +30,34 @@ const SLASH: u8 = '/' as u8;
 const EQUAL: u8 = '=' as u8;
 const EXCLAMATION_MARK: u8 = '!' as u8;
 const QUESTION_MARK: u8 = '?' as u8;
+
+// ' '     (0x20)    space (SPC)
+// '\t'    (0x09)  horizontal tab (TAB)
+// '\n'    (0x0a)  newline (LF)
+// '\v'    (0x0b)  vertical tab (VT)
+// '\f'    (0x0c)  feed (FF)
+// '\r'    (0x0d)  carriage return (CR)
+#[inline]
+fn is_space(c: u8) -> bool {
+    c == 0x20 || c == 0x09 || c == 0x0a || c == 0x0b || c == 0x0c || c == 0x0d
+}
+
+#[inline]
+fn skip_spaces(contents: &[u8], p: &mut usize) {
+    while *p < contents.len() && is_space(contents[*p]) {
+        *p += 1;
+    }
+}
+
+impl Document {
+    pub fn root(&self) -> Ref<Node> {
+        self.root.borrow()
+    }
+
+    pub fn root_mut(&mut self) -> RefMut<Node> {
+        self.root.borrow_mut()
+    }
+}
 
 impl Parser {
     pub fn new() -> Parser {
@@ -119,9 +140,7 @@ impl Parser {
                         match contents[i] {
                             GREATER_THAN => {
                                 i += 1;
-                                while i < contents.len() && is_space(contents[i]) {
-                                    i += 1;
-                                }
+                                skip_spaces(contents, &mut i);
                                 State::ReadTag
                             }
                             _ => State::ReadContent,
@@ -129,12 +148,11 @@ impl Parser {
                     }
                 }
                 State::ReadAttribute => {
-                    while i < contents.len() && is_space(contents[i]) {
-                        i += 1;
-                    }
+                    skip_spaces(contents, &mut i);
+                    let start = i;
+                    
                     while i < contents.len() && !is_space(contents[i])
                         && contents[i] != GREATER_THAN
-                        && contents[i] != EQUAL
                     {
                         i += 1;
                     }
@@ -143,9 +161,7 @@ impl Parser {
                 }
                 State::ReadContent => {
                     i += 1;
-                    while i < contents.len() && is_space(contents[i]) {
-                        i += 1;
-                    }
+                    skip_spaces(contents, &mut i);
 
                     let start = i;
                     while i < contents.len() && contents[i] != LESS_THAN {
@@ -177,17 +193,6 @@ impl Parser {
     }
 }
 
-// ' '     (0x20)    space (SPC)
-// '\t'    (0x09)  horizontal tab (TAB)
-// '\n'    (0x0a)  newline (LF)
-// '\v'    (0x0b)  vertical tab (VT)
-// '\f'    (0x0c)  feed (FF)
-// '\r'    (0x0d)  carriage return (CR)
-#[inline]
-fn is_space(c: u8) -> bool {
-    c == 0x20 || c == 0x09 || c == 0x0a || c == 0x0b || c == 0x0c || c == 0x0d
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs::File;
@@ -198,6 +203,21 @@ mod tests {
     #[test]
     fn test_parse() {
         let mut f = File::open("./xml/data1.xml").expect("file not found");
+        let mut contents = String::new();
+        f.read_to_string(&mut contents);
+
+        let start = PreciseTime::now();
+        let parser = Parser::new();
+        let doc = parser.parse(contents.as_bytes());
+        let end = PreciseTime::now();
+
+        // println!("{} seconds", start.to(end));
+        assert_eq!('a' as u8, 97u8);
+    }
+
+    #[test]
+    fn bench_parse() {
+        let mut f = File::open("./xml/large.xml").expect("file not found");
         let mut contents = String::new();
         f.read_to_string(&mut contents);
 

@@ -86,6 +86,15 @@ impl Node {
         self
     }
 
+    pub fn node_type(&self) -> &NodeType {
+        &self.node_type
+    }
+
+    pub fn set_node_type(&mut self, node_type: NodeType) -> &mut Self {
+        self.node_type = node_type;
+        self
+    }
+
     pub fn next_sibling(&self) -> Option<Ref<Self>> {
         self.next.as_ref().map(|node| node.borrow())
     }

@@ -1,10 +1,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+type Link<T> = Option<Rc<RefCell<T>>>;
+
 #[derive(Debug)]
 pub struct Attribute {
     name: String,
     value: String,
+    next: Link<Attribute>,
+    prev: Link<Attribute>,
 }
 
 impl Attribute {
@@ -12,6 +16,8 @@ impl Attribute {
         Rc::new(RefCell::new(Attribute {
             name: name,
             value: value,
+            next: None,
+            prev: None,
         }))
     }
 
@@ -23,12 +29,14 @@ impl Attribute {
         &self.value
     }
 
-    pub fn set_name(&mut self, name: String) {
+    pub fn set_name(&mut self, name: String) -> &mut Self {
         self.name = name;
+        self
     }
 
-    pub fn set_value(&mut self, value: String) {
+    pub fn set_value(&mut self, value: String) -> &mut Self {
         self.value = value;
+        self
     }
 }
 

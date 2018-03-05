@@ -6,5 +6,6 @@ authors = ["vietto"]
 [dependencies]
 time = "*"
 
-[profile.test]
-opt-level = 3
+[profile.dev]
+opt-level = 0
+debug = true
