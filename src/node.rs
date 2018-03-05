@@ -138,17 +138,14 @@ impl Node {
     pub fn clone_rc(&self) -> Rc<RefCell<Self>> {
         return self.me.clone().unwrap();
     }
-    // xml_attribute xml_node::append_attribute(const char_t* name);
-    // xml_attribute xml_node::prepend_attribute(const char_t* name);
-    // xml_attribute xml_node::insert_attribute_after(const char_t* name, const xml_attribute& attr);
-    // xml_attribute xml_node::insert_attribute_before(const char_t* name, const xml_attribute& attr);
+
     pub fn append_child(&mut self, name: String) -> Rc<RefCell<Node>> {
         let node = Node::new(name);
 
         match self.last_child.take() {
             Some(last_child) => {
-                node.borrow_mut().prev = Some(last_child.clone());
                 last_child.borrow_mut().next = Some(node.clone());
+                node.borrow_mut().prev = Some(last_child);
                 self.last_child = Some(node.clone());
             }
             None => {
@@ -165,8 +162,8 @@ impl Node {
 
         match self.first_child.take() {
             Some(first_child) => {
-                node.borrow_mut().next = Some(first_child.clone());
                 first_child.borrow_mut().prev = Some(node.clone());
+                node.borrow_mut().next = Some(first_child);
                 self.first_child = Some(node.clone());
             }
             None => {
@@ -183,8 +180,8 @@ impl Node {
 
         match self.last_child.take() {
             Some(last_child) => {
-                node.borrow_mut().prev = Some(last_child.clone());
                 last_child.borrow_mut().next = Some(node.clone());
+                node.borrow_mut().prev = Some(last_child);
                 self.last_child = Some(node.clone());
             }
             None => {
@@ -201,8 +198,8 @@ impl Node {
 
         match self.first_child.take() {
             Some(first_child) => {
-                node.borrow_mut().next = Some(first_child.clone());
                 first_child.borrow_mut().prev = Some(node.clone());
+                node.borrow_mut().next = Some(first_child);
                 self.first_child = Some(node.clone());
             }
             None => {
@@ -214,10 +211,48 @@ impl Node {
         node
     }
 
-    // xml_node xml_node::prepend_child(const char_t* name);
     // xml_node xml_node::insert_child_before(xml_node_type type, const xml_node& node);
     // xml_node xml_node::insert_child_after(const char_t* name, const xml_node& node);
     // xml_node xml_node::insert_child_before(const char_t* name, const xml_node& node);
+
+    pub fn append_attribute(&mut self, name: String, value: String) -> Rc<RefCell<Attribute>> {
+        let attr = Attribute::new(name, value);
+        match self.last_attr.take() {
+            Some(last_attr) => {
+                last_attr
+                    .borrow_mut()
+                    .set_next_attribute(Some(attr.clone()));
+                attr.borrow_mut().set_previous_attribute(Some(last_attr));
+                self.last_attr = Some(attr.clone());
+            }
+            None => {
+                self.first_attr = Some(attr.clone());
+                self.last_attr = Some(attr.clone());
+            }
+        }
+        attr
+    }
+
+    pub fn prepend_attribute(&mut self, name: String, value: String) -> Rc<RefCell<Attribute>> {
+        let attr = Attribute::new(name, value);
+        match self.first_attr.take() {
+            Some(first_attr) => {
+                first_attr
+                    .borrow_mut()
+                    .set_previous_attribute(Some(attr.clone()));
+                attr.borrow_mut().set_next_attribute(Some(first_attr));
+                self.first_attr = Some(attr.clone());
+            }
+            None => {
+                self.first_attr = Some(attr.clone());
+                self.last_attr = Some(attr.clone());
+            }
+        }
+        attr
+    }
+    // xml_attribute xml_node::insert_attribute_after(const char_t* name, const xml_attribute& attr);
+    // xml_attribute xml_node::insert_attribute_before(const char_t* name, const xml_attribute& attr);
+
     // typedef xml_node_iterator iterator;
     // iterator begin() const;
     // iterator end() const;

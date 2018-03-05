@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell, RefMut};
 use std::rc::Rc;
 
 type Link<T> = Option<Rc<RefCell<T>>>;
@@ -37,6 +37,30 @@ impl Attribute {
     pub fn set_value(&mut self, value: String) -> &mut Self {
         self.value = value;
         self
+    }
+
+    pub fn next_attribute(&self) -> Option<Ref<Attribute>> {
+        self.next.as_ref().map(|attr| attr.borrow())
+    }
+
+    pub fn next_attribute_mut(&mut self) -> Option<RefMut<Attribute>> {
+        self.next.as_mut().map(|attr| attr.borrow_mut())
+    }
+
+    pub fn set_next_attribute(&mut self, attr: Link<Attribute>) {
+        self.next = attr;
+    }
+
+    pub fn previous_attribute(&self) -> Option<Ref<Attribute>> {
+        self.prev.as_ref().map(|attr| attr.borrow())
+    }
+
+    pub fn previous_attribute_mut(&mut self) -> Option<RefMut<Attribute>> {
+        self.prev.as_mut().map(|attr| attr.borrow_mut())
+    }
+
+    pub fn set_previous_attribute(&mut self, attr: Link<Attribute>) {
+        self.prev = attr;
     }
 }
 

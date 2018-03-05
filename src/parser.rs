@@ -150,7 +150,7 @@ impl Parser {
                 State::ReadAttribute => {
                     skip_spaces(contents, &mut i);
                     let start = i;
-                    
+
                     while i < contents.len() && !is_space(contents[i])
                         && contents[i] != GREATER_THAN
                     {
@@ -197,44 +197,41 @@ impl Parser {
 mod tests {
     use std::fs::File;
     use std::io::prelude::*;
-    use time::PreciseTime;
+    use test::Bencher;
     use super::*;
 
     #[test]
     fn test_parse() {
         let mut f = File::open("./xml/data1.xml").expect("file not found");
         let mut contents = String::new();
-        f.read_to_string(&mut contents);
+        let result = f.read_to_string(&mut contents);
+        assert_eq!(result.is_ok(), true);
 
-        let start = PreciseTime::now();
         let parser = Parser::new();
-        let doc = parser.parse(contents.as_bytes());
-        let end = PreciseTime::now();
+        let _ = parser.parse(contents.as_bytes());
 
-        // println!("{} seconds", start.to(end));
         assert_eq!('a' as u8, 97u8);
     }
 
-    #[test]
-    fn bench_parse() {
+    #[bench]
+    fn bench_parse(b: &mut Bencher) {
         let mut f = File::open("./xml/large.xml").expect("file not found");
         let mut contents = String::new();
-        f.read_to_string(&mut contents);
+        let result = f.read_to_string(&mut contents);
+        assert_eq!(result.is_ok(), true);
 
-        let start = PreciseTime::now();
         let parser = Parser::new();
-        let doc = parser.parse(contents.as_bytes());
-        let end = PreciseTime::now();
-
-        println!("{} seconds", start.to(end));
-        assert_eq!('a' as u8, 97u8);
+        b.iter(|| {
+            let _ = parser.parse(contents.as_bytes());
+        });
     }
 
     #[test]
     fn test_parse_note_xml() {
         let mut f = File::open("./xml/note.xml").expect("file not found");
         let mut contents = String::new();
-        f.read_to_string(&mut contents);
+        let result = f.read_to_string(&mut contents);
+        assert_eq!(result.is_ok(), true);
 
         let parser = Parser::new();
         let result = parser.parse(contents.as_bytes());
