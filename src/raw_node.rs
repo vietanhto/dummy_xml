@@ -39,6 +39,19 @@ impl Node {
         })
     }
 
+    pub fn new_by_type(node_type: NodeType) -> Box<Self> {
+        Box::new(Node {
+            name: String::from(""),
+            node_type: node_type,
+            value: String::from(""),
+            next: None,
+            prev: ptr::null_mut(),
+            parent: ptr::null_mut(),
+            first_child: None,
+            last_child: ptr::null_mut(),
+        })
+    }
+
     pub fn name(&self) -> &String {
         &self.name
     }
@@ -140,6 +153,24 @@ impl Node {
         }
         unsafe { &mut *raw_ptr }
     }
+
+    pub fn append_child_by_type(&mut self, node_type: NodeType) -> &mut Self {
+        let mut node = Node::new_by_type(node_type);
+        let raw_ptr: *mut _ = &mut *node;
+        node.parent = self;
+        match unsafe { self.last_child.as_mut() } {
+            Some(last_child) => {
+                node.prev = last_child;
+                last_child.next = Some(node);
+                self.last_child = raw_ptr;
+            }
+            None => {
+                self.first_child = Some(node);
+                self.last_child = raw_ptr;
+            }
+        }
+        unsafe { &mut *raw_ptr }
+    }
 }
 
 #[cfg(test)]
@@ -171,13 +202,13 @@ mod tests {
             assert_eq!(c1.name(), "child0");
         }
 
-        // node.append_child_by_type(NodeType::PcData)
-        //     .set_value("text1".to_string());
+        node.append_child_by_type(NodeType::PcData)
+            .set_value("text1".to_string());
 
-        // {
-        //     let txt = node.last_child().unwrap();
-        //     assert_eq!(txt.value(), "text1");
-        // }
+        {
+            let txt = node.last_child().unwrap();
+            assert_eq!(txt.value(), "text1");
+        }
     }
 
     #[test]
