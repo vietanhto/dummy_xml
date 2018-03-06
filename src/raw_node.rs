@@ -1,4 +1,3 @@
-use std::mem;
 use std::ptr;
 use std::borrow::{Borrow, BorrowMut};
 
@@ -26,6 +25,7 @@ pub struct Node {
 }
 
 impl Node {
+    #[inline]
     pub fn new(name: String) -> Box<Self> {
         Box::new(Node {
             name: name,
@@ -39,6 +39,7 @@ impl Node {
         })
     }
 
+    #[inline]
     pub fn new_by_type(node_type: NodeType) -> Box<Self> {
         Box::new(Node {
             name: String::from(""),
@@ -52,72 +53,89 @@ impl Node {
         })
     }
 
+    #[inline]
     pub fn name(&self) -> &String {
         &self.name
     }
 
+    #[inline]
     pub fn set_name(&mut self, name: String) -> &mut Self {
         self.name = name;
         self
     }
 
+    #[inline]
     pub fn value(&self) -> &String {
         &self.value
     }
 
+    #[inline]
     pub fn set_value(&mut self, value: String) -> &mut Self {
         self.value = value;
         self
     }
 
+    #[inline]
     pub fn node_type(&self) -> &NodeType {
         &self.node_type
     }
 
+    #[inline]
     pub fn set_node_type(&mut self, node_type: NodeType) -> &mut Self {
         self.node_type = node_type;
         self
     }
 
+    #[inline]
     pub fn next_sibling(&self) -> Option<&Self> {
         self.next.as_ref().map(|node| node.borrow())
     }
+    #[inline]
     pub fn next_sibling_mut(&mut self) -> Option<&mut Self> {
         self.next.as_mut().map(|node| node.borrow_mut())
     }
 
+    #[inline]
     pub fn previous_sibling(&self) -> Option<&Self> {
         unsafe { self.prev.as_ref().map(|node| node.borrow()) }
     }
 
+    #[inline]
     pub fn previous_sibling_mut(&mut self) -> Option<&mut Self> {
         unsafe { self.prev.as_mut().map(|node| node.borrow_mut()) }
     }
 
+    #[inline]
     pub fn parent(&self) -> Option<&Self> {
         unsafe { self.parent.as_ref().map(|node| node.borrow()) }
     }
 
+    #[inline]
     pub fn parent_mut(&mut self) -> Option<&mut Self> {
         unsafe { self.parent.as_mut().map(|node| node.borrow_mut()) }
     }
 
+    #[inline]
     pub fn first_child(&self) -> Option<&Self> {
         self.first_child.as_ref().map(|node| node.borrow())
     }
 
+    #[inline]
     pub fn first_child_mut(&mut self) -> Option<&mut Self> {
         self.first_child.as_mut().map(|node| node.borrow_mut())
     }
 
+    #[inline]
     pub fn last_child(&self) -> Option<&Self> {
         unsafe { self.last_child.as_ref().map(|node| node.borrow()) }
     }
 
+    #[inline]
     pub fn last_child_mut(&mut self) -> Option<&mut Self> {
         unsafe { self.last_child.as_mut().map(|node| node.borrow_mut()) }
     }
 
+    #[inline]
     pub fn append_child(&mut self, name: String) -> &mut Self {
         let mut node = Node::new(name);
         let raw_ptr: *mut _ = &mut *node;
@@ -136,6 +154,7 @@ impl Node {
         unsafe { &mut *raw_ptr }
     }
 
+    #[inline]
     pub fn prepend_child(&mut self, name: String) -> &mut Self {
         let mut node = Node::new(name);
         let raw_ptr: *mut _ = &mut *node;
@@ -154,6 +173,7 @@ impl Node {
         unsafe { &mut *raw_ptr }
     }
 
+    #[inline]
     pub fn append_child_by_type(&mut self, node_type: NodeType) -> &mut Self {
         let mut node = Node::new_by_type(node_type);
         let raw_ptr: *mut _ = &mut *node;

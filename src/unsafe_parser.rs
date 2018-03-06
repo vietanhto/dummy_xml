@@ -1,8 +1,5 @@
-use std::cell::{Ref, RefCell, RefMut};
-use std::rc::Rc;
-
 use raw_node::{Node, NodeType};
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::BorrowMut;
 
 pub struct Document {
     root: Box<Node>,
@@ -67,117 +64,117 @@ impl Parser {
 
     pub fn parse(&self, contents: &[u8]) -> Result<Document, ParseXmlError> {
         let mut root: Box<Node> = Node::new("root".to_string());
-        //parsing scope
-        {
-            let mut current_parent: Option<&mut Node> = Some(root.borrow_mut());
-            let mut state = State::Start;
-            let mut i = 0;
-
-            loop {
-                state = match state {
-                    State::Start => {
-                        while i < contents.len() && contents[i] != LESS_THAN {
-                            i += 1;
-                        }
-
-                        State::ReadTag
-                    }
-                    State::ReadTag => {
-                        i += 1; // skip first '<'
-                        if i >= contents.len() {
-                            State::End
-                        } else if contents[i] == SLASH {
-                            i += 1;
-                            State::ReadTagClose
-                        } else if contents[i] == EXCLAMATION_MARK || contents[i] == QUESTION_MARK {
-                            while i < contents.len() && contents[i] != LESS_THAN {
-                                i += 1;
-                            }
-                            State::ReadTag
-                        } else {
-                            State::ReadTagOpen
-                        }
-                    }
-                    State::ReadTagOpen => {
-                        //open tag
-                        let start = i;
-                        while i < contents.len() && !is_space(contents[i])
-                            && contents[i] != GREATER_THAN
-                        {
-                            i += 1;
-                        }
-                        let tag_name = String::from_utf8(contents[start..i].to_vec()).unwrap();
-                        current_parent = current_parent
-                            .take()
-                            .map(|old_parent| old_parent.append_child(tag_name));
-
-                        State::ReadAttribute
-                    }
-                    State::ReadTagClose => {
-                        while i < contents.len() && contents[i] != GREATER_THAN {
-                            i += 1;
-                        }
-                        current_parent = current_parent
-                            .take()
-                            .and_then(|old_parent| old_parent.parent_mut());
-
-                        if i >= contents.len() {
-                            State::End
-                        } else {
-                            match contents[i] {
-                                GREATER_THAN => {
-                                    i += 1;
-                                    skip_spaces(contents, &mut i);
-                                    State::ReadTag
-                                }
-                                _ => State::ReadContent,
-                            }
-                        }
-                    }
-                    State::ReadAttribute => {
-                        skip_spaces(contents, &mut i);
-                        let start = i;
-                        while i < contents.len() && !is_space(contents[i])
-                            && contents[i] != GREATER_THAN
-                        {
-                            i += 1;
-                        }
-
-                        State::ReadContent
-                    }
-                    State::ReadContent => {
-                        i += 1;
-                        skip_spaces(contents, &mut i);
-
-                        let start = i;
-                        while i < contents.len() && contents[i] != LESS_THAN {
-                            i += 1;
-                        }
-                        if i > start {
-                            current_parent = current_parent.take().map(|node| {
-                                let txt = String::from_utf8(contents[start..i].to_vec()).unwrap();
-                                node.append_child_by_type(NodeType::PcData).set_value(txt);
-                                node
-                            });
-                        }
-                        if i >= contents.len() {
-                            State::End
-                        } else {
-                            State::ReadTag
-                        }
-                    }
-                    State::End => {
-                        break;
-                    }
-                };
-            }
-        } //parsing scope - end
-
+        self.parse_internal(contents, root.borrow_mut());
         // match root {
         //     Some(root) => Ok(Document { root: root }),
         //     None => Err(ParseXmlError::InvalidXml),
         // }
         Ok(Document { root: root })
+    }
+
+    fn parse_internal(&self, contents: &[u8], root: &mut Node) {
+        let mut current_parent: Option<&mut Node> = Some(root);
+        let mut state = State::Start;
+        let mut i = 0;
+
+        loop {
+            state = match state {
+                State::Start => {
+                    while i < contents.len() && contents[i] != LESS_THAN {
+                        i += 1;
+                    }
+
+                    State::ReadTag
+                }
+                State::ReadTag => {
+                    i += 1; // skip first '<'
+                    if i >= contents.len() {
+                        State::End
+                    } else if contents[i] == SLASH {
+                        i += 1;
+                        State::ReadTagClose
+                    } else if contents[i] == EXCLAMATION_MARK || contents[i] == QUESTION_MARK {
+                        while i < contents.len() && contents[i] != LESS_THAN {
+                            i += 1;
+                        }
+                        State::ReadTag
+                    } else {
+                        State::ReadTagOpen
+                    }
+                }
+                State::ReadTagOpen => {
+                    //open tag
+                    let start = i;
+                    while i < contents.len() && !is_space(contents[i])
+                        && contents[i] != GREATER_THAN
+                    {
+                        i += 1;
+                    }
+                    let tag_name = String::from_utf8(contents[start..i].to_vec()).unwrap();
+                    current_parent = current_parent
+                        .take()
+                        .map(|old_parent| old_parent.append_child(tag_name));
+
+                    State::ReadAttribute
+                }
+                State::ReadTagClose => {
+                    while i < contents.len() && contents[i] != GREATER_THAN {
+                        i += 1;
+                    }
+                    current_parent = current_parent
+                        .take()
+                        .and_then(|old_parent| old_parent.parent_mut());
+
+                    if i >= contents.len() {
+                        State::End
+                    } else {
+                        match contents[i] {
+                            GREATER_THAN => {
+                                i += 1;
+                                skip_spaces(contents, &mut i);
+                                State::ReadTag
+                            }
+                            _ => State::ReadContent,
+                        }
+                    }
+                }
+                State::ReadAttribute => {
+                    skip_spaces(contents, &mut i);
+                    let start = i;
+                    while i < contents.len() && !is_space(contents[i])
+                        && contents[i] != GREATER_THAN
+                    {
+                        i += 1;
+                    }
+
+                    State::ReadContent
+                }
+                State::ReadContent => {
+                    i += 1;
+                    skip_spaces(contents, &mut i);
+
+                    let start = i;
+                    while i < contents.len() && contents[i] != LESS_THAN {
+                        i += 1;
+                    }
+                    if i > start {
+                        current_parent = current_parent.take().map(|node| {
+                            let txt = String::from_utf8(contents[start..i].to_vec()).unwrap();
+                            node.append_child_by_type(NodeType::PcData).set_value(txt);
+                            node
+                        });
+                    }
+                    if i >= contents.len() {
+                        State::End
+                    } else {
+                        State::ReadTag
+                    }
+                }
+                State::End => {
+                    break;
+                }
+            };
+        }
     }
 }
 
