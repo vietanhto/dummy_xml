@@ -136,7 +136,7 @@ impl Node {
     }
 
     pub fn clone_rc(&self) -> Rc<RefCell<Self>> {
-        return self.me.clone().unwrap();
+        self.me.clone().unwrap()
     }
 
     pub fn append_child(&mut self, name: String) -> Rc<RefCell<Node>> {
