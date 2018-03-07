@@ -10,6 +10,5 @@ license = "MIT"
 
 [dependencies]
 
-[profile.dev]
-opt-level = 0
-debug = true
+[badges]
+travis-ci = { repository = "vietanhto/dummy_xml" }
