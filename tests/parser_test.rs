@@ -18,7 +18,7 @@ fn parse_test() {
 }
 
 #[test]
-fn parse_str_test() {
+fn sample() {
     let result =
         dummy_xml::parser::parse_str("<parent><child1 name='go'/><child2 name='rust'/></parent>");
     match result {

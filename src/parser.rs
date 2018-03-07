@@ -146,7 +146,9 @@ fn parse_internal(contents: &[u8], root: &mut Node) {
             }
             State::ReadTagOpen => {
                 let start = i;
-                while i < size && !is_space(contents[i]) && contents[i] != GREATER_THAN {
+                while i < size && !is_space(contents[i]) && contents[i] != GREATER_THAN
+                    && contents[i] != SLASH
+                {
                     i += 1;
                 }
                 let tag_name = String::from_utf8(contents[start..i].to_vec()).unwrap();
@@ -185,12 +187,18 @@ fn parse_internal(contents: &[u8], root: &mut Node) {
                 skip_chartype!(contents, i, Chartype::Space);
                 let start = i;
                 while i < size && !is_space(contents[i]) && contents[i] != GREATER_THAN
-                    && contents[i] != EQUAL
+                    && contents[i] != EQUAL && contents[i] != SLASH
                 {
                     i += 1;
                 }
 
                 if i == start {
+                    if contents[i] == SLASH {
+                        i += 1;
+                        current_parent = current_parent
+                            .take()
+                            .and_then(|old_parent| old_parent.parent_mut());
+                    }
                     State::ReadContent
                 } else if contents[i] != EQUAL {
                     //no-value attr
