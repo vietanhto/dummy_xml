@@ -4,18 +4,28 @@ extern crate test;
 
 use std::fs::File;
 use std::io::prelude::*;
-use test::Bencher;
 
 use dummy_xml::parser;
 
-#[bench]
-fn bench_parse(b: &mut Bencher) {
+#[test]
+fn parse_test() {
     let mut f = File::open("./xml/large.xml").expect("file not found");
     let mut contents = String::new();
     let result = f.read_to_string(&mut contents);
     assert_eq!(result.is_ok(), true);
 
-    b.iter(|| {
-        let _ = parser::parse(contents.as_bytes());
-    });
+    let _ = parser::parse(contents.as_bytes());
+}
+
+#[test]
+fn parse_str_test() {
+    let result =
+        dummy_xml::parser::parse_str("<parent><child1 name='go'/><child2 name='rust'/></parent>");
+    match result {
+        Ok(document) => {
+            let root = document.root();
+            println!("root is {:?}", root);
+        }
+        Err(error) => panic!("{:?}", error),
+    }
 }

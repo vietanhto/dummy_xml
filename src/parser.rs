@@ -95,6 +95,10 @@ fn is_space(c: u8) -> bool {
     is_chartype(c, Chartype::Space)
 }
 
+pub fn parse_str(contents: &str) -> Result<Document, ParseXmlError> {
+    parse(contents.as_bytes())
+}
+
 pub fn parse_string(contents: &String) -> Result<Document, ParseXmlError> {
     parse(contents.as_bytes())
 }
