@@ -1,10 +1,8 @@
-use std::cell::{Ref, RefCell, RefMut};
-use std::rc::Rc;
-
 use node::{Node, NodeType};
+use std::borrow::BorrowMut;
 
 pub struct Document {
-    root: Rc<RefCell<Node>>,
+    root: Box<Node>,
 }
 
 pub struct Parser {}
@@ -31,6 +29,63 @@ const EQUAL: u8 = '=' as u8;
 const EXCLAMATION_MARK: u8 = '!' as u8;
 const QUESTION_MARK: u8 = '?' as u8;
 
+#[derive(Clone, Copy)]
+enum Chartype {
+    // ParsePcData = 1,   // \0, &, \r, <
+    // ParseAttr = 2,     // \0, &, \r, ', "
+    // ParseAttrWs = 4,   // \0, &, \r, ', ", \n, tab
+    Space = 8, // \r, \n, space, tab
+    ParseCData = 16, // \0, ], >, \r
+               // ParseComment = 32, // \0, -, >, \r
+               // Symbol = 64,       // Any symbol > 127, a-z, A-Z, 0-9, _, :, -, .
+               // StartSymBol = 128, // Any symbol > 127, a-z, A-Z, _, :
+}
+
+const CHARTYPE_TABLE: [u8; 256] = [
+    55,  0,   0,   0,   0,   0,   0,   0,      0,   12,  12,  0,   0,   63,  0,   0,   // 0-15
+    0,   0,   0,   0,   0,   0,   0,   0,      0,   0,   0,   0,   0,   0,   0,   0,   // 16-31
+    8,   0,   6,   0,   0,   0,   7,   6,      0,   0,   0,   0,   0,   96,  64,  0,   // 32-47
+    64,  64,  64,  64,  64,  64,  64,  64,     64,  64,  192, 0,   1,   0,   48,  0,   // 48-63
+    0,   192, 192, 192, 192, 192, 192, 192,    192, 192, 192, 192, 192, 192, 192, 192, // 64-79
+    192, 192, 192, 192, 192, 192, 192, 192,    192, 192, 192, 0,   0,   16,  0,   192, // 80-95
+    0,   192, 192, 192, 192, 192, 192, 192,    192, 192, 192, 192, 192, 192, 192, 192, // 96-111
+    192, 192, 192, 192, 192, 192, 192, 192,    192, 192, 192, 0, 0, 0, 0, 0,           // 112-127
+
+    192, 192, 192, 192, 192, 192, 192, 192,    192, 192, 192, 192, 192, 192, 192, 192, // 128+
+    192, 192, 192, 192, 192, 192, 192, 192,    192, 192, 192, 192, 192, 192, 192, 192,
+    192, 192, 192, 192, 192, 192, 192, 192,    192, 192, 192, 192, 192, 192, 192, 192,
+    192, 192, 192, 192, 192, 192, 192, 192,    192, 192, 192, 192, 192, 192, 192, 192,
+    192, 192, 192, 192, 192, 192, 192, 192,    192, 192, 192, 192, 192, 192, 192, 192,
+    192, 192, 192, 192, 192, 192, 192, 192,    192, 192, 192, 192, 192, 192, 192, 192,
+    192, 192, 192, 192, 192, 192, 192, 192,    192, 192, 192, 192, 192, 192, 192, 192,
+    192, 192, 192, 192, 192, 192, 192, 192,    192, 192, 192, 192, 192, 192, 192, 192
+];
+
+macro_rules! skip_chartype {
+    ($contents: ident, $p: ident, $chartype: expr) => {
+        while $p < $contents.len()
+            && (CHARTYPE_TABLE[$contents[$p] as usize] & $chartype as u8 > 0)
+        {
+            $p += 1;
+        }
+    };
+}
+
+macro_rules! skip_until_chartype {
+    ($contents: ident, $p: ident, $chartype: expr) => {
+        while $p < $contents.len()
+            && !(CHARTYPE_TABLE[$contents[$p] as usize] & $chartype as u8 > 0)
+        {
+            $p += 1;
+        }
+    };
+}
+
+#[inline]
+fn is_chartype(c: u8, chartype: Chartype) -> bool {
+    CHARTYPE_TABLE[c as usize] & chartype as u8 > 0
+}
+
 // ' '     (0x20)    space (SPC)
 // '\t'    (0x09)  horizontal tab (TAB)
 // '\n'    (0x0a)  newline (LF)
@@ -39,23 +94,16 @@ const QUESTION_MARK: u8 = '?' as u8;
 // '\r'    (0x0d)  carriage return (CR)
 #[inline]
 fn is_space(c: u8) -> bool {
-    c == 0x20 || c == 0x09 || c == 0x0a || c == 0x0b || c == 0x0c || c == 0x0d
-}
-
-#[inline]
-fn skip_spaces(contents: &[u8], p: &mut usize) {
-    while *p < contents.len() && is_space(contents[*p]) {
-        *p += 1;
-    }
+    is_chartype(c, Chartype::Space)
 }
 
 impl Document {
-    pub fn root(&self) -> Ref<Node> {
-        self.root.borrow()
+    pub fn root(&self) -> &Node {
+        self.root.first_child().unwrap()
     }
 
-    pub fn root_mut(&mut self) -> RefMut<Node> {
-        self.root.borrow_mut()
+    pub fn root_mut(&mut self) -> &mut Node {
+        self.root.first_child_mut().unwrap()
     }
 }
 
@@ -65,15 +113,25 @@ impl Parser {
     }
 
     pub fn parse(&self, contents: &[u8]) -> Result<Document, ParseXmlError> {
-        let mut current_parent: Option<Rc<RefCell<Node>>> = None;
-        let mut root: Option<Rc<RefCell<Node>>> = None;
+        let mut root: Box<Node> = Node::new("root".to_string());
+        self.parse_internal(contents, root.borrow_mut());
+        // match root {
+        //     Some(root) => Ok(Document { root: root }),
+        //     None => Err(ParseXmlError::InvalidXml),
+        // }
+        Ok(Document { root: root })
+    }
+
+    fn parse_internal(&self, contents: &[u8], root: &mut Node) {
+        let mut current_parent: Option<&mut Node> = Some(root);
         let mut state = State::Start;
         let mut i = 0;
+        let size = contents.len();
 
         loop {
             state = match state {
                 State::Start => {
-                    while i < contents.len() && contents[i] != LESS_THAN {
+                    while i < size && contents[i] != LESS_THAN {
                         i += 1;
                     }
 
@@ -81,13 +139,13 @@ impl Parser {
                 }
                 State::ReadTag => {
                     i += 1; // skip first '<'
-                    if i >= contents.len() {
+                    if i >= size {
                         State::End
                     } else if contents[i] == SLASH {
                         i += 1;
                         State::ReadTagClose
                     } else if contents[i] == EXCLAMATION_MARK || contents[i] == QUESTION_MARK {
-                        while i < contents.len() && contents[i] != LESS_THAN {
+                        while i < size && contents[i] != LESS_THAN {
                             i += 1;
                         }
                         State::ReadTag
@@ -96,51 +154,34 @@ impl Parser {
                     }
                 }
                 State::ReadTagOpen => {
-                    //open tag
                     let start = i;
-                    while i < contents.len() && !is_space(contents[i])
-                        && contents[i] != GREATER_THAN
-                    {
-                        i += 1;
-                    }
+                    skip_until_chartype!(
+                        contents,
+                        i,
+                        Chartype::Space as u8 | Chartype::ParseCData as u8
+                    );
                     let tag_name = String::from_utf8(contents[start..i].to_vec()).unwrap();
-                    current_parent = match current_parent.take() {
-                        Some(old_parent) => {
-                            let mut old_parent = old_parent.borrow_mut();
-                            old_parent.append_child(tag_name);
-                            let current_parent = Some(old_parent.last_child().unwrap().clone_rc());
-                            current_parent
-                        }
-                        None => {
-                            //first tag
-                            let current_parent = Node::new(tag_name);
-                            root = Some(current_parent.clone());
-                            Some(current_parent)
-                        }
-                    };
+                    current_parent = current_parent
+                        .take()
+                        .map(|old_parent| old_parent.append_child(tag_name));
 
                     State::ReadAttribute
                 }
                 State::ReadTagClose => {
-                    while i < contents.len() && contents[i] != GREATER_THAN {
+                    while i < size && contents[i] != GREATER_THAN {
                         i += 1;
                     }
-                    current_parent = match current_parent.take() {
-                        Some(old_parent) => {
-                            let mut old_parent = old_parent.borrow_mut();
-                            let current_parent = old_parent.parent().map(|node| node.clone_rc());
-                            current_parent
-                        }
-                        None => None,
-                    };
+                    current_parent = current_parent
+                        .take()
+                        .and_then(|old_parent| old_parent.parent_mut());
 
-                    if i >= contents.len() {
+                    if i >= size {
                         State::End
                     } else {
                         match contents[i] {
                             GREATER_THAN => {
                                 i += 1;
-                                skip_spaces(contents, &mut i);
+                                skip_chartype!(contents, i, Chartype::Space);
                                 State::ReadTag
                             }
                             _ => State::ReadContent,
@@ -148,34 +189,57 @@ impl Parser {
                     }
                 }
                 State::ReadAttribute => {
-                    skip_spaces(contents, &mut i);
+                    skip_chartype!(contents, i, Chartype::Space);
                     let start = i;
-
-                    while i < contents.len() && !is_space(contents[i])
-                        && contents[i] != GREATER_THAN
+                    while i < size && !is_space(contents[i]) && contents[i] != GREATER_THAN
+                        && contents[i] != EQUAL
                     {
                         i += 1;
                     }
 
-                    State::ReadContent
+                    if i == start {
+                        State::ReadContent
+                    } else if contents[i] != EQUAL {
+                        //no-value attr
+                        let name = String::from_utf8(contents[start..i].to_vec()).unwrap();
+                        current_parent
+                            .as_mut()
+                            .map(|node| node.append_attribute(name, String::from("")));
+                        State::ReadAttribute
+                    } else {
+                        let end = i;
+                        i += 1; //skip =
+                        let quote = contents[i];
+                        i += 1;
+                        let value_start = i;
+                        while i < size && contents[i] != quote {
+                            i += 1;
+                        }
+                        let name = String::from_utf8(contents[start..end].to_vec()).unwrap();
+                        let value = String::from_utf8(contents[value_start..i].to_vec()).unwrap();
+                        current_parent
+                            .as_mut()
+                            .map(|node| node.append_attribute(name, value));
+                        i += 1;
+                        State::ReadAttribute
+                    }
                 }
                 State::ReadContent => {
                     i += 1;
-                    skip_spaces(contents, &mut i);
+                    skip_chartype!(contents, i, Chartype::Space);
 
                     let start = i;
-                    while i < contents.len() && contents[i] != LESS_THAN {
+                    while i < size && contents[i] != LESS_THAN {
                         i += 1;
                     }
                     if i > start {
                         current_parent = current_parent.take().map(|node| {
-                            let txt_node = node.borrow_mut().append_child_by_type(NodeType::PcData);
                             let txt = String::from_utf8(contents[start..i].to_vec()).unwrap();
-                            txt_node.borrow_mut().set_value(txt);
+                            node.append_child_by_type(NodeType::PcData).set_value(txt);
                             node
                         });
                     }
-                    if i >= contents.len() {
+                    if i >= size {
                         State::End
                     } else {
                         State::ReadTag
@@ -186,10 +250,6 @@ impl Parser {
                 }
             };
         }
-        match root {
-            Some(root) => Ok(Document { root: root }),
-            None => Err(ParseXmlError::InvalidXml),
-        }
     }
 }
 
@@ -197,7 +257,11 @@ impl Parser {
 mod tests {
     use std::fs::File;
     use std::io::prelude::*;
+    use std::borrow::Borrow;
+
     use test::Bencher;
+
+    use node::Attribute;
     use super::*;
 
     #[test]
@@ -241,6 +305,10 @@ mod tests {
 
         let root = doc.root();
         assert_eq!(*root.name(), "note");
+        assert_eq!(
+            root.first_attribute().unwrap(),
+            Attribute::new("id".to_string(), "1".to_string()).borrow()
+        );
 
         let first = root.first_child().unwrap();
         assert_eq!(*first.name(), "to");
@@ -273,8 +341,6 @@ mod tests {
         assert_eq!(is_space(' ' as u8), true);
         assert_eq!(is_space('\t' as u8), true);
         assert_eq!(is_space('\n' as u8), true);
-        assert_eq!(is_space(0x0b), true);
-        assert_eq!(is_space(0x0c), true);
         assert_eq!(is_space('\r' as u8), true);
     }
 }

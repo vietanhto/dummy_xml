@@ -2,11 +2,8 @@
 extern crate test;
 extern crate time;
 
-pub mod attribute;
 pub mod node;
 pub mod parser;
-pub mod raw_node;
-pub mod unsafe_parser;
 
 #[cfg(test)]
 mod tests {
