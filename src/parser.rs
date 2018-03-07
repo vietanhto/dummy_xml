@@ -5,8 +5,6 @@ pub struct Document {
     root: Box<Node>,
 }
 
-pub struct Parser {}
-
 #[derive(Debug)]
 pub enum ParseXmlError {
     InvalidXml,
@@ -28,6 +26,16 @@ const SLASH: u8 = '/' as u8;
 const EQUAL: u8 = '=' as u8;
 const EXCLAMATION_MARK: u8 = '!' as u8;
 const QUESTION_MARK: u8 = '?' as u8;
+
+impl Document {
+    pub fn root(&self) -> &Node {
+        self.root.borrow()
+    }
+
+    pub fn root_mut(&mut self) -> &mut Node {
+        self.root.borrow_mut()
+    }
+}
 
 #[derive(Clone, Copy)]
 enum Chartype {
@@ -87,161 +95,149 @@ fn is_space(c: u8) -> bool {
     is_chartype(c, Chartype::Space)
 }
 
-impl Document {
-    pub fn root(&self) -> &Node {
-        self.root.borrow()
-    }
+pub fn parse_string(contents: &String) -> Result<Document, ParseXmlError> {
+    parse(contents.as_bytes())
+}
 
-    pub fn root_mut(&mut self) -> &mut Node {
-        self.root.borrow_mut()
+pub fn parse(contents: &[u8]) -> Result<Document, ParseXmlError> {
+    let mut root: Box<Node> = Node::new("".to_string());
+    parse_internal(contents, root.borrow_mut());
+    if root.name().len() > 0 {
+        Ok(Document { root: root })
+    } else {
+        Err(ParseXmlError::InvalidXml)
     }
 }
 
-impl Parser {
-    pub fn new() -> Parser {
-        Parser {}
-    }
+fn parse_internal(contents: &[u8], root: &mut Node) {
+    let mut current_parent: Option<&mut Node> = Some(root);
+    let mut state = State::Start;
+    let mut i = 0;
+    let size = contents.len();
 
-    pub fn parse(&self, contents: &[u8]) -> Result<Document, ParseXmlError> {
-        let mut root: Box<Node> = Node::new("".to_string());
-        self.parse_internal(contents, root.borrow_mut());
-        if root.name().len() > 0 {
-            Ok(Document { root: root })
-        } else {
-            Err(ParseXmlError::InvalidXml)
-        }
-    }
+    loop {
+        state = match state {
+            State::Start => {
+                while i < size && contents[i] != LESS_THAN {
+                    i += 1;
+                }
 
-    fn parse_internal(&self, contents: &[u8], root: &mut Node) {
-        let mut current_parent: Option<&mut Node> = Some(root);
-        let mut state = State::Start;
-        let mut i = 0;
-        let size = contents.len();
-
-        loop {
-            state = match state {
-                State::Start => {
+                State::ReadTag
+            }
+            State::ReadTag => {
+                i += 1; // skip first '<'
+                if i >= size {
+                    State::End
+                } else if contents[i] == SLASH {
+                    i += 1;
+                    State::ReadTagClose
+                } else if contents[i] == EXCLAMATION_MARK || contents[i] == QUESTION_MARK {
                     while i < size && contents[i] != LESS_THAN {
                         i += 1;
                     }
-
                     State::ReadTag
+                } else {
+                    State::ReadTagOpen
                 }
-                State::ReadTag => {
-                    i += 1; // skip first '<'
-                    if i >= size {
-                        State::End
-                    } else if contents[i] == SLASH {
-                        i += 1;
-                        State::ReadTagClose
-                    } else if contents[i] == EXCLAMATION_MARK || contents[i] == QUESTION_MARK {
-                        while i < size && contents[i] != LESS_THAN {
-                            i += 1;
-                        }
-                        State::ReadTag
+            }
+            State::ReadTagOpen => {
+                let start = i;
+                while i < size && !is_space(contents[i]) && contents[i] != GREATER_THAN {
+                    i += 1;
+                }
+                let tag_name = String::from_utf8(contents[start..i].to_vec()).unwrap();
+                current_parent = current_parent.take().map(|old_parent| {
+                    if old_parent.name().len() == 0 {
+                        old_parent.set_name(tag_name)
                     } else {
-                        State::ReadTagOpen
+                        old_parent.append_child(tag_name)
+                    }
+                });
+
+                State::ReadAttribute
+            }
+            State::ReadTagClose => {
+                while i < size && contents[i] != GREATER_THAN {
+                    i += 1;
+                }
+                current_parent = current_parent
+                    .take()
+                    .and_then(|old_parent| old_parent.parent_mut());
+
+                if i >= size {
+                    State::End
+                } else {
+                    match contents[i] {
+                        GREATER_THAN => {
+                            i += 1;
+                            skip_chartype!(contents, i, Chartype::Space);
+                            State::ReadTag
+                        }
+                        _ => State::ReadContent,
                     }
                 }
-                State::ReadTagOpen => {
-                    let start = i;
-                    while i < size && !is_space(contents[i]) && contents[i] != GREATER_THAN {
+            }
+            State::ReadAttribute => {
+                skip_chartype!(contents, i, Chartype::Space);
+                let start = i;
+                while i < size && !is_space(contents[i]) && contents[i] != GREATER_THAN
+                    && contents[i] != EQUAL
+                {
+                    i += 1;
+                }
+
+                if i == start {
+                    State::ReadContent
+                } else if contents[i] != EQUAL {
+                    //no-value attr
+                    let name = String::from_utf8(contents[start..i].to_vec()).unwrap();
+                    current_parent
+                        .as_mut()
+                        .map(|node| node.append_attribute(name, String::from("")));
+                    State::ReadAttribute
+                } else {
+                    let end = i;
+                    i += 1; //skip =
+                    let quote = contents[i];
+                    i += 1;
+                    let value_start = i;
+                    while i < size && contents[i] != quote {
                         i += 1;
                     }
-                    let tag_name = String::from_utf8(contents[start..i].to_vec()).unwrap();
-                    current_parent = current_parent.take().map(|old_parent| {
-                        if old_parent.name().len() == 0 {
-                            old_parent.set_name(tag_name)
-                        } else {
-                            old_parent.append_child(tag_name)
-                        }
-                    });
-
+                    let name = String::from_utf8(contents[start..end].to_vec()).unwrap();
+                    let value = String::from_utf8(contents[value_start..i].to_vec()).unwrap();
+                    current_parent
+                        .as_mut()
+                        .map(|node| node.append_attribute(name, value));
+                    i += 1;
                     State::ReadAttribute
                 }
-                State::ReadTagClose => {
-                    while i < size && contents[i] != GREATER_THAN {
-                        i += 1;
-                    }
-                    current_parent = current_parent
-                        .take()
-                        .and_then(|old_parent| old_parent.parent_mut());
+            }
+            State::ReadContent => {
+                i += 1;
+                skip_chartype!(contents, i, Chartype::Space);
 
-                    if i >= size {
-                        State::End
-                    } else {
-                        match contents[i] {
-                            GREATER_THAN => {
-                                i += 1;
-                                skip_chartype!(contents, i, Chartype::Space);
-                                State::ReadTag
-                            }
-                            _ => State::ReadContent,
-                        }
-                    }
-                }
-                State::ReadAttribute => {
-                    skip_chartype!(contents, i, Chartype::Space);
-                    let start = i;
-                    while i < size && !is_space(contents[i]) && contents[i] != GREATER_THAN
-                        && contents[i] != EQUAL
-                    {
-                        i += 1;
-                    }
-
-                    if i == start {
-                        State::ReadContent
-                    } else if contents[i] != EQUAL {
-                        //no-value attr
-                        let name = String::from_utf8(contents[start..i].to_vec()).unwrap();
-                        current_parent
-                            .as_mut()
-                            .map(|node| node.append_attribute(name, String::from("")));
-                        State::ReadAttribute
-                    } else {
-                        let end = i;
-                        i += 1; //skip =
-                        let quote = contents[i];
-                        i += 1;
-                        let value_start = i;
-                        while i < size && contents[i] != quote {
-                            i += 1;
-                        }
-                        let name = String::from_utf8(contents[start..end].to_vec()).unwrap();
-                        let value = String::from_utf8(contents[value_start..i].to_vec()).unwrap();
-                        current_parent
-                            .as_mut()
-                            .map(|node| node.append_attribute(name, value));
-                        i += 1;
-                        State::ReadAttribute
-                    }
-                }
-                State::ReadContent => {
+                let start = i;
+                while i < size && contents[i] != LESS_THAN {
                     i += 1;
-                    skip_chartype!(contents, i, Chartype::Space);
-
-                    let start = i;
-                    while i < size && contents[i] != LESS_THAN {
-                        i += 1;
-                    }
-                    if i > start {
-                        current_parent = current_parent.take().map(|node| {
-                            let txt = String::from_utf8(contents[start..i].to_vec()).unwrap();
-                            node.append_child_by_type(NodeType::PcData).set_value(txt);
-                            node
-                        });
-                    }
-                    if i >= size {
-                        State::End
-                    } else {
-                        State::ReadTag
-                    }
                 }
-                State::End => {
-                    break;
+                if i > start {
+                    current_parent = current_parent.take().map(|node| {
+                        let txt = String::from_utf8(contents[start..i].to_vec()).unwrap();
+                        node.append_child_by_type(NodeType::PcData).set_value(txt);
+                        node
+                    });
                 }
-            };
-        }
+                if i >= size {
+                    State::End
+                } else {
+                    State::ReadTag
+                }
+            }
+            State::End => {
+                break;
+            }
+        };
     }
 }
 
@@ -263,8 +259,7 @@ mod tests {
         let result = f.read_to_string(&mut contents);
         assert_eq!(result.is_ok(), true);
 
-        let parser = Parser::new();
-        let _ = parser.parse(contents.as_bytes());
+        let _ = parse(contents.as_bytes());
 
         assert_eq!('a' as u8, 97u8);
     }
@@ -276,9 +271,8 @@ mod tests {
         let result = f.read_to_string(&mut contents);
         assert_eq!(result.is_ok(), true);
 
-        let parser = Parser::new();
         b.iter(|| {
-            let _ = parser.parse(contents.as_bytes());
+            let _ = parse(contents.as_bytes());
         });
     }
 
@@ -289,8 +283,7 @@ mod tests {
         let result = f.read_to_string(&mut contents);
         assert_eq!(result.is_ok(), true);
 
-        let parser = Parser::new();
-        let result = parser.parse(contents.as_bytes());
+        let result = parse(contents.as_bytes());
 
         assert_eq!(result.is_ok(), true);
         let doc = result.unwrap();
