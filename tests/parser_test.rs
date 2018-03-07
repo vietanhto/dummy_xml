@@ -1,7 +1,6 @@
 #![feature(test)]
 extern crate dummy_xml;
 extern crate test;
-extern crate time;
 
 use std::fs::File;
 use std::io::prelude::*;

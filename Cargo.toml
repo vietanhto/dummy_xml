@@ -1,10 +1,11 @@
 [package]
 name = "dummy_xml"
 version = "0.1.0"
-authors = ["vietto"]
+authors = ["vietanhto"]
+description = "Fast Non-validating XML DOM parser"
+license = "MIT"
 
 [dependencies]
-time = "*"
 
 [profile.dev]
 opt-level = 0

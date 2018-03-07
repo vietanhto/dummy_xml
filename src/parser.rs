@@ -256,7 +256,7 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use std::fs::File;
-    use std::io::prelude::*;
+    use std::io::Read;
     use std::borrow::Borrow;
 
     use test::Bencher;

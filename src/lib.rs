@@ -1,6 +1,5 @@
 #![feature(test, allocator_api)]
 extern crate test;
-extern crate time;
 
 pub mod node;
 pub mod parser;
