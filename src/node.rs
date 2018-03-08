@@ -1,5 +1,5 @@
 use std::ptr;
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::{Borrow, BorrowMut, Cow};
 
 #[derive(Debug)]
 pub struct Attribute {
@@ -21,15 +21,15 @@ pub enum NodeType {
 }
 
 #[derive(Debug)]
-pub struct Node {
-    name: String,
-    value: String,
+pub struct Node<'a> {
+    name: Cow<'a, str>,
+    value: Cow<'a, str>,
     node_type: NodeType,
-    next: Option<Box<Node>>,
-    parent: *mut Node,
-    prev: *mut Node,
-    first_child: Option<Box<Node>>,
-    last_child: *mut Node,
+    next: Option<Box<Node<'a>>>,
+    parent: *mut Node<'a>,
+    prev: *mut Node<'a>,
+    first_child: Option<Box<Node<'a>>>,
+    last_child: *mut Node<'a>,
     first_attr: Option<Box<Attribute>>,
     last_attr: *mut Attribute,
 }
@@ -46,12 +46,12 @@ impl Attribute {
     }
 
     #[inline]
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
     #[inline]
-    pub fn value(&self) -> &String {
+    pub fn value(&self) -> &str {
         &self.value
     }
 
@@ -95,13 +95,15 @@ impl PartialEq for Attribute {
     }
 }
 
-impl Node {
+const EMPTY_STRING: Cow<str> = Cow::Borrowed("");
+
+impl<'a> Node<'a> {
     #[inline]
     pub fn new(name: String) -> Box<Self> {
         Box::new(Node {
-            name: name,
+            name: Cow::Owned(name),
             node_type: NodeType::Element,
-            value: String::from(""),
+            value: EMPTY_STRING,
             next: None,
             prev: ptr::null_mut(),
             parent: ptr::null_mut(),
@@ -115,9 +117,9 @@ impl Node {
     #[inline]
     pub fn new_by_type(node_type: NodeType) -> Box<Self> {
         Box::new(Node {
-            name: String::from(""),
+            name: EMPTY_STRING,
             node_type: node_type,
-            value: String::from(""),
+            value: EMPTY_STRING,
             next: None,
             prev: ptr::null_mut(),
             parent: ptr::null_mut(),
@@ -129,24 +131,24 @@ impl Node {
     }
 
     #[inline]
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
     #[inline]
     pub fn set_name(&mut self, name: String) -> &mut Self {
-        self.name = name;
+        self.name = Cow::Owned(name);
         self
     }
 
     #[inline]
-    pub fn value(&self) -> &String {
+    pub fn value(&self) -> &str {
         &self.value
     }
 
     #[inline]
     pub fn set_value(&mut self, value: String) -> &mut Self {
-        self.value = value;
+        self.value = Cow::Owned(value);
         self
     }
 
@@ -308,16 +310,36 @@ impl Node {
     }
 
     #[inline]
-    pub fn insert_child_after(&mut self, name: String, child: &mut Node) -> &mut Self {
+    pub fn insert_child_after(&mut self, name: String, child: &mut Self) -> &mut Self {
         let mut node = Node::new(name);
         let raw_ptr: *mut _ = &mut *node;
         node.parent = self;
+
         node.prev = child;
         node.next = child.next.take();
+        node.next.as_mut().map(|n| n.prev = raw_ptr);
         child.next = Some(node);
+
         unsafe { &mut *raw_ptr }
     }
-    // xml_node xml_node::insert_child_before(const char_t* name, const xml_node& node);
+
+    #[inline]
+    pub fn insert_child_before(&mut self, name: String, child: &mut Self) -> &mut Self {
+        let mut node = Node::new(name);
+        let raw_ptr: *mut _ = &mut *node;
+        node.parent = self;
+
+        let prev_child = child.prev;
+
+        node.prev = child.prev;
+        child.prev = raw_ptr;
+        unsafe {
+            node.next = (*prev_child).next.take();
+            (*prev_child).next = Some(node);
+        }
+
+        unsafe { &mut *raw_ptr }
+    }
 
     #[inline]
     pub fn append_attribute(&mut self, name: String, value: String) -> &mut Attribute {

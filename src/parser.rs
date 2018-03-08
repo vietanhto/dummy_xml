@@ -1,8 +1,8 @@
 use node::{Node, NodeType};
 use std::borrow::{Borrow, BorrowMut};
 
-pub struct Document {
-    root: Box<Node>,
+pub struct Document<'a> {
+    root: Box<Node<'a>>,
 }
 
 #[derive(Debug)]
@@ -27,12 +27,12 @@ const EQUAL: u8 = '=' as u8;
 const EXCLAMATION_MARK: u8 = '!' as u8;
 const QUESTION_MARK: u8 = '?' as u8;
 
-impl Document {
-    pub fn root(&self) -> &Node {
+impl<'a> Document<'a> {
+    pub fn root(&self) -> &Node<'a> {
         self.root.borrow()
     }
 
-    pub fn root_mut(&mut self) -> &mut Node {
+    pub fn root_mut(&mut self) -> &mut Node<'a> {
         self.root.borrow_mut()
     }
 }
@@ -301,7 +301,7 @@ mod tests {
         let doc = result.unwrap();
 
         let root = doc.root();
-        assert_eq!(*root.name(), "note");
+        assert_eq!(root.name(), "note");
         assert_eq!(
             root.first_attribute().unwrap(),
             Attribute::new("id".to_string(), "1".to_string()).borrow()
@@ -309,29 +309,29 @@ mod tests {
         assert_eq!(root.parent().is_none(), true);
 
         let first = root.first_child().unwrap();
-        assert_eq!(*first.name(), "to");
+        assert_eq!(first.name(), "to");
         let to_txt = first.first_child().unwrap();
-        assert_eq!(*to_txt.name(), "");
-        assert_eq!(*to_txt.value(), "Tove");
+        assert_eq!(to_txt.name(), "");
+        assert_eq!(to_txt.value(), "Tove");
 
         let second = first.next_sibling().unwrap();
-        assert_eq!(*second.name(), "from");
+        assert_eq!(second.name(), "from");
         assert_eq!(
             second.first_attribute().unwrap(),
             Attribute::new("value".to_string(), "Jani".to_string()).borrow()
         );
 
         let fourth = root.last_child().unwrap();
-        assert_eq!(*fourth.name(), "body");
+        assert_eq!(fourth.name(), "body");
         let body_txt = fourth.first_child().unwrap();
-        assert_eq!(*body_txt.name(), "");
-        assert_eq!(*body_txt.value(), "Don't forget me this weekend!");
+        assert_eq!(body_txt.name(), "");
+        assert_eq!(body_txt.value(), "Don't forget me this weekend!");
 
         let third = fourth.previous_sibling().unwrap();
-        assert_eq!(*third.name(), "heading");
+        assert_eq!(third.name(), "heading");
         let heading_txt = third.first_child().unwrap();
-        assert_eq!(*heading_txt.name(), "");
-        assert_eq!(*heading_txt.value(), "Reminder");
+        assert_eq!(heading_txt.name(), "");
+        assert_eq!(heading_txt.value(), "Reminder");
     }
 
     #[test]
