@@ -1,5 +1,6 @@
 use node::{Node, NodeType};
 use std::borrow::{Borrow, BorrowMut};
+use std::panic;
 
 pub struct Document<'a> {
     root: Box<Node<'a>>,
@@ -37,17 +38,20 @@ impl<'a> Document<'a> {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy)]
 enum Chartype {
-    // ParsePcData = 1,   // \0, &, \r, <
-    // ParseAttr = 2,     // \0, &, \r, ', "
-    // ParseAttrWs = 4,   // \0, &, \r, ', ", \n, tab
-    Space = 8, // \r, \n, space, tab
-               // ParseCData = 16, // \0, ], >, \r
-               // ParseComment = 32, // \0, -, >, \r
-               // Symbol = 64,       // Any symbol > 127, a-z, A-Z, 0-9, _, :, -, .
-               // StartSymBol = 128, // Any symbol > 127, a-z, A-Z, _, :
+    ParsePcData = 1,   // \0, &, \r, <
+    ParseAttr = 2,     // \0, &, \r, ', "
+    ParseAttrWs = 4,   // \0, &, \r, ', ", \n, tab
+    Space = 8,         // \r, \n, space, tab
+    ParseCData = 16,   // \0, ], >, \r
+    ParseComment = 32, // \0, -, >, \r
+    Symbol = 64,       // Any symbol > 127, a-z, A-Z, 0-9, _, :, -, .
+    StartSymBol = 128, // Any symbol > 127, a-z, A-Z, _, :
 }
+
+const SPACE_AND_CLOSE_SIGN: u8 = Chartype::Space as u8 | Chartype::ParseCData as u8;
 
 const CHARTYPE_TABLE: [u8; 256] = [
     55,  0,   0,   0,   0,   0,   0,   0,      0,   12,  12,  0,   0,   63,  0,   0,   // 0-15
@@ -71,28 +75,34 @@ const CHARTYPE_TABLE: [u8; 256] = [
 
 macro_rules! skip_chartype {
     ($contents: ident, $p: ident, $chartype: expr) => {
-        while $p < $contents.len()
-            && (CHARTYPE_TABLE[$contents[$p] as usize] & $chartype as u8 > 0)
-        {
+        while CHARTYPE_TABLE[$contents[$p] as usize] & $chartype as u8 > 0 {
             $p += 1;
         }
     };
 }
 
-#[inline]
-fn is_chartype(c: u8, chartype: Chartype) -> bool {
-    CHARTYPE_TABLE[c as usize] & chartype as u8 > 0
+macro_rules! skip_chartype_safe {
+    ($contents: ident, $p: ident, $size: ident, $chartype: expr) => {
+        while $p < $size && CHARTYPE_TABLE[$contents[$p] as usize] & $chartype as u8 > 0 {
+            $p += 1;
+        }
+    };
 }
 
-// ' '     (0x20)    space (SPC)
-// '\t'    (0x09)  horizontal tab (TAB)
-// '\n'    (0x0a)  newline (LF)
-// '\v'    (0x0b)  vertical tab (VT)
-// '\f'    (0x0c)  feed (FF)
-// '\r'    (0x0d)  carriage return (CR)
-#[inline]
-fn is_space(c: u8) -> bool {
-    is_chartype(c, Chartype::Space)
+macro_rules! scan_chartype {
+    ($contents: ident, $p: ident, $chartype: expr) => {
+        while CHARTYPE_TABLE[$contents[$p] as usize] & $chartype as u8 == 0 {
+            $p += 1;
+        }
+    };
+}
+
+macro_rules! scan_char {
+    ($contents: ident, $p: ident, $char: ident) => {
+        while $contents[$p] != $char {
+            $p += 1;
+        }
+    };
 }
 
 pub fn parse_str(contents: &str) -> Result<Document, ParseXmlError> {
@@ -105,11 +115,15 @@ pub fn parse_string(contents: &String) -> Result<Document, ParseXmlError> {
 
 pub fn parse(contents: &[u8]) -> Result<Document, ParseXmlError> {
     let mut root: Box<Node> = Node::new("".to_string());
-    parse_internal(contents, root.borrow_mut());
-    if root.name().len() > 0 {
-        Ok(Document { root: root })
-    } else {
-        Err(ParseXmlError::InvalidXml)
+
+    let result = panic::catch_unwind(move || {
+        parse_internal(contents, root.borrow_mut());
+        root
+    });
+
+    match result {
+        Ok(root) => Ok(Document { root: root }),
+        Err(_) => Err(ParseXmlError::InvalidXml),
     }
 }
 
@@ -122,35 +136,31 @@ fn parse_internal(contents: &[u8], root: &mut Node) {
     loop {
         state = match state {
             State::Start => {
-                while i < size && contents[i] != LESS_THAN {
-                    i += 1;
-                }
-
+                scan_char!(contents, i, LESS_THAN);
                 State::ReadTag
             }
             State::ReadTag => {
                 i += 1; // skip first '<'
                 if i >= size {
                     State::End
-                } else if contents[i] == SLASH {
-                    i += 1;
-                    State::ReadTagClose
-                } else if contents[i] == EXCLAMATION_MARK || contents[i] == QUESTION_MARK {
-                    while i < size && contents[i] != LESS_THAN {
-                        i += 1;
-                    }
-                    State::ReadTag
                 } else {
-                    State::ReadTagOpen
+                    match contents[i] {
+                        SLASH => {
+                            i += 1;
+                            State::ReadTagClose
+                        }
+                        EXCLAMATION_MARK | QUESTION_MARK => {
+                            scan_char!(contents, i, LESS_THAN);
+                            State::ReadTag
+                        }
+                        _ => State::ReadTagOpen,
+                    }
                 }
             }
             State::ReadTagOpen => {
                 let start = i;
-                while i < size && !is_space(contents[i]) && contents[i] != GREATER_THAN
-                    && contents[i] != SLASH
-                {
-                    i += 1;
-                }
+                scan_chartype!(contents, i, SPACE_AND_CLOSE_SIGN);
+
                 let tag_name = String::from_utf8(contents[start..i].to_vec()).unwrap();
                 current_parent = current_parent.take().map(|old_parent| {
                     if old_parent.name().len() == 0 {
@@ -163,66 +173,48 @@ fn parse_internal(contents: &[u8], root: &mut Node) {
                 State::ReadAttribute
             }
             State::ReadTagClose => {
-                while i < size && contents[i] != GREATER_THAN {
-                    i += 1;
-                }
+                scan_char!(contents, i, GREATER_THAN);
                 current_parent = current_parent
                     .take()
                     .and_then(|old_parent| old_parent.parent_mut());
 
-                if i >= size {
-                    State::End
-                } else {
-                    match contents[i] {
-                        GREATER_THAN => {
-                            i += 1;
-                            skip_chartype!(contents, i, Chartype::Space);
-                            State::ReadTag
-                        }
-                        _ => State::ReadContent,
+                match contents[i] {
+                    GREATER_THAN => {
+                        i += 1;
+                        skip_chartype_safe!(contents, i, size, Chartype::Space);
+                        State::ReadTag
                     }
+                    _ => State::ReadContent,
                 }
             }
             State::ReadAttribute => {
                 skip_chartype!(contents, i, Chartype::Space);
-                let start = i;
-                while i < size && !is_space(contents[i]) && contents[i] != GREATER_THAN
-                    && contents[i] != EQUAL && contents[i] != SLASH
-                {
-                    i += 1;
-                }
-
-                if i == start {
-                    if contents[i] == SLASH {
+                match contents[i] {
+                    SLASH => {
                         i += 1;
                         current_parent = current_parent
                             .take()
                             .and_then(|old_parent| old_parent.parent_mut());
+                        State::ReadContent
                     }
-                    State::ReadContent
-                } else if contents[i] != EQUAL {
-                    //no-value attr
-                    let name = String::from_utf8(contents[start..i].to_vec()).unwrap();
-                    current_parent
-                        .as_mut()
-                        .map(|node| node.append_attribute(name, String::from("")));
-                    State::ReadAttribute
-                } else {
-                    let end = i;
-                    i += 1; //skip =
-                    let quote = contents[i];
-                    i += 1;
-                    let value_start = i;
-                    while i < size && contents[i] != quote {
+                    GREATER_THAN => State::ReadContent,
+                    _ => {
+                        let start = i;
+                        scan_char!(contents, i, EQUAL);
+                        let end = i;
+                        i += 1; //skip =
+                        let quote = contents[i];
                         i += 1;
+                        let value_start = i;
+                        scan_char!(contents, i, quote);
+                        let name = String::from_utf8(contents[start..end].to_vec()).unwrap();
+                        let value = String::from_utf8(contents[value_start..i].to_vec()).unwrap();
+                        current_parent
+                            .as_mut()
+                            .map(|node| node.append_attribute(name, value));
+                        i += 1;
+                        State::ReadAttribute
                     }
-                    let name = String::from_utf8(contents[start..end].to_vec()).unwrap();
-                    let value = String::from_utf8(contents[value_start..i].to_vec()).unwrap();
-                    current_parent
-                        .as_mut()
-                        .map(|node| node.append_attribute(name, value));
-                    i += 1;
-                    State::ReadAttribute
                 }
             }
             State::ReadContent => {
@@ -230,9 +222,7 @@ fn parse_internal(contents: &[u8], root: &mut Node) {
                 skip_chartype!(contents, i, Chartype::Space);
 
                 let start = i;
-                while i < size && contents[i] != LESS_THAN {
-                    i += 1;
-                }
+                scan_char!(contents, i, LESS_THAN);
                 if i > start {
                     current_parent = current_parent.take().map(|node| {
                         let txt = String::from_utf8(contents[start..i].to_vec()).unwrap();
@@ -240,11 +230,7 @@ fn parse_internal(contents: &[u8], root: &mut Node) {
                         node
                     });
                 }
-                if i >= size {
-                    State::End
-                } else {
-                    State::ReadTag
-                }
+                State::ReadTag
             }
             State::End => {
                 break;
@@ -259,9 +245,8 @@ mod tests {
     use std::io::Read;
     use std::borrow::Borrow;
 
-    use test::Bencher;
-
     use node::Attribute;
+
     use super::*;
 
     #[test]
@@ -276,16 +261,14 @@ mod tests {
         assert_eq!('a' as u8, 97u8);
     }
 
-    #[bench]
-    fn bench_parse(b: &mut Bencher) {
+    #[test]
+    fn bench_parse() {
         let mut f = File::open("./xml/large.xml").expect("file not found");
         let mut contents = String::new();
         let result = f.read_to_string(&mut contents);
         assert_eq!(result.is_ok(), true);
 
-        b.iter(|| {
-            let _ = parse(contents.as_bytes());
-        });
+        let _ = parse(contents.as_bytes());
     }
 
     #[test]
@@ -332,14 +315,5 @@ mod tests {
         let heading_txt = third.first_child().unwrap();
         assert_eq!(heading_txt.name(), "");
         assert_eq!(heading_txt.value(), "Reminder");
-    }
-
-    #[test]
-    fn test_is_space() {
-        assert_eq!(is_space('c' as u8), false);
-        assert_eq!(is_space(' ' as u8), true);
-        assert_eq!(is_space('\t' as u8), true);
-        assert_eq!(is_space('\n' as u8), true);
-        assert_eq!(is_space('\r' as u8), true);
     }
 }

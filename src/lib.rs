@@ -1,6 +1,3 @@
-#![feature(test, allocator_api)]
-extern crate test;
-
 pub mod node;
 pub mod parser;
 pub mod writer;

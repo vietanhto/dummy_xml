@@ -1,8 +1,8 @@
 [package]
 name = "dummy_xml"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["vietanhto"]
-description = "Fast Non-validating XML DOM parser"
+description = "Fast Non-validating XML DOM parser."
 readme = "README.md"
 repository="https://github.com/vietanhto/dummy_xml"
 keywords = ["xml", "parser", "dom"]

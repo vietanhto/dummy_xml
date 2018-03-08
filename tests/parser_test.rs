@@ -1,6 +1,4 @@
-#![feature(test)]
 extern crate dummy_xml;
-extern crate test;
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -28,4 +26,16 @@ fn sample() {
         }
         Err(error) => panic!("{:?}", error),
     }
+}
+
+#[test]
+fn parse_blank() {
+    let result = parser::parse_str("");
+    assert!(result.is_err());
+}
+
+#[test]
+fn parse_negative_1() {
+    let result = parser::parse_str("<parent><child1 ");
+    assert!(result.is_err());
 }
