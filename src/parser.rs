@@ -316,9 +316,10 @@ mod tests {
 
         let second = first.next_sibling().unwrap();
         assert_eq!(*second.name(), "from");
-        let from_txt = second.first_child().unwrap();
-        assert_eq!(*from_txt.name(), "");
-        assert_eq!(*from_txt.value(), "Jani");
+        assert_eq!(
+            second.first_attribute().unwrap(),
+            Attribute::new("value".to_string(), "Jani".to_string()).borrow()
+        );
 
         let fourth = root.last_child().unwrap();
         assert_eq!(*fourth.name(), "body");

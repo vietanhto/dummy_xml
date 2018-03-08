@@ -3,6 +3,7 @@ extern crate test;
 
 pub mod node;
 pub mod parser;
+pub mod writer;
 
 #[cfg(test)]
 mod tests {

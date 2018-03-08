@@ -1,6 +1,6 @@
 [package]
 name = "dummy_xml"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["vietanhto"]
 description = "Fast Non-validating XML DOM parser"
 readme = "README.md"
