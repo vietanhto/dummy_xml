@@ -22,7 +22,11 @@ fn sample() {
     match result {
         Ok(document) => {
             let root = document.root();
-            println!("root is {:?}", root);
+            println!("root is {}", root.name());
+            println!(
+                "child2's name is {:?}",
+                root.last_child().and_then(|node| node.attribute("name"))
+            );
         }
         Err(error) => panic!("{:?}", error),
     }

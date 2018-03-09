@@ -234,6 +234,21 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
+    pub fn attribute<S: Into<String>>(&self, attr_name: S) -> Option<&str> {
+        let target = attr_name.into();
+        let mut attr_option = self.first_attribute();
+        let mut result: Option<&str> = None;
+        while attr_option.is_some() && result.is_none() {
+            let attr = attr_option.unwrap();
+            if attr.name() == target {
+                result = Some(attr.value());
+            }
+            attr_option = attr.next_attribute();
+        }
+        result
+    }
+
+    #[inline]
     pub fn append_child<S: Into<String>>(&mut self, name: S) -> &mut Self {
         let mut node = Node::new(name.into());
         let raw_ptr: *mut _ = &mut *node;

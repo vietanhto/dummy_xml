@@ -9,11 +9,16 @@ extern crate dummy_xml;
 
 use dummy_xml::parser;
 
-let result = parser::parse_str("<parent><child1 name='go'/><child2 name='rust'/></parent>");
+let result =
+    dummy_xml::parser::parse_str("<parent><child1 name='go'/><child2 name='rust'/></parent>");
 match result {
     Ok(document) => {
         let root = document.root();
-        println!("root is {:?}", root);
+        println!("root is {}", root.name());
+        println!(
+            "child2's name is {:?}",
+            root.last_child().and_then(|node| node.attribute("name"))
+        );
     }
     Err(error) => panic!("{:?}", error),
 }
