@@ -36,10 +36,10 @@ pub struct Node<'a> {
 
 impl Attribute {
     #[inline]
-    pub fn new(name: String, value: String) -> Box<Self> {
+    pub fn new<S: Into<String>>(name: S, value: S) -> Box<Self> {
         Box::new(Attribute {
-            name: name,
-            value: value,
+            name: name.into(),
+            value: value.into(),
             next: None,
             prev: ptr::null_mut(),
         })
@@ -56,14 +56,14 @@ impl Attribute {
     }
 
     #[inline]
-    pub fn set_name(&mut self, name: String) -> &mut Self {
-        self.name = name;
+    pub fn set_name<S: Into<String>>(&mut self, name: S) -> &mut Self {
+        self.name = name.into();
         self
     }
 
     #[inline]
-    pub fn set_value(&mut self, value: String) -> &mut Self {
-        self.value = value;
+    pub fn set_value<S: Into<String>>(&mut self, value: S) -> &mut Self {
+        self.value = value.into();
         self
     }
 
@@ -99,9 +99,9 @@ const EMPTY_STRING: Cow<str> = Cow::Borrowed("");
 
 impl<'a> Node<'a> {
     #[inline]
-    pub fn new(name: String) -> Box<Self> {
+    pub fn new<S: Into<String>>(name: S) -> Box<Self> {
         Box::new(Node {
-            name: Cow::Owned(name),
+            name: Cow::Owned(name.into()),
             node_type: NodeType::Element,
             value: EMPTY_STRING,
             next: None,
@@ -136,8 +136,8 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
-    pub fn set_name(&mut self, name: String) -> &mut Self {
-        self.name = Cow::Owned(name);
+    pub fn set_name<S: Into<String>>(&mut self, name: S) -> &mut Self {
+        self.name = Cow::Owned(name.into());
         self
     }
 
@@ -147,8 +147,8 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
-    pub fn set_value(&mut self, value: String) -> &mut Self {
-        self.value = Cow::Owned(value);
+    pub fn set_value<S: Into<String>>(&mut self, value: S) -> &mut Self {
+        self.value = Cow::Owned(value.into());
         self
     }
 
@@ -234,8 +234,8 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
-    pub fn append_child(&mut self, name: String) -> &mut Self {
-        let mut node = Node::new(name);
+    pub fn append_child<S: Into<String>>(&mut self, name: S) -> &mut Self {
+        let mut node = Node::new(name.into());
         let raw_ptr: *mut _ = &mut *node;
         node.parent = self;
         match unsafe { self.last_child.as_mut() } {
@@ -253,8 +253,8 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
-    pub fn prepend_child(&mut self, name: String) -> &mut Self {
-        let mut node = Node::new(name);
+    pub fn prepend_child<S: Into<String>>(&mut self, name: S) -> &mut Self {
+        let mut node = Node::new(name.into());
         let raw_ptr: *mut _ = &mut *node;
         node.parent = self;
         match self.first_child.take() {
@@ -310,8 +310,8 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
-    pub fn insert_child_after(&mut self, name: String, child: &mut Self) -> &mut Self {
-        let mut node = Node::new(name);
+    pub fn insert_child_after<S: Into<String>>(&mut self, name: S, child: &mut Self) -> &mut Self {
+        let mut node = Node::new(name.into());
         let raw_ptr: *mut _ = &mut *node;
         node.parent = self;
 
@@ -324,8 +324,8 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
-    pub fn insert_child_before(&mut self, name: String, child: &mut Self) -> &mut Self {
-        let mut node = Node::new(name);
+    pub fn insert_child_before<S: Into<String>>(&mut self, name: S, child: &mut Self) -> &mut Self {
+        let mut node = Node::new(name.into());
         let raw_ptr: *mut _ = &mut *node;
         node.parent = self;
 
@@ -342,7 +342,7 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
-    pub fn append_attribute(&mut self, name: String, value: String) -> &mut Attribute {
+    pub fn append_attribute<S: Into<String>>(&mut self, name: S, value: S) -> &mut Attribute {
         let mut attr = Attribute::new(name, value);
         let raw_ptr: *mut _ = &mut *attr;
         match unsafe { self.last_attr.as_mut() } {
@@ -360,7 +360,7 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
-    pub fn prepend_attribute(&mut self, name: String, value: String) -> &mut Attribute {
+    pub fn prepend_attribute<S: Into<String>>(&mut self, name: S, value: S) -> &mut Attribute {
         let mut attr = Attribute::new(name, value);
         let raw_ptr: *mut _ = &mut *attr;
         match self.first_attr.take() {
@@ -391,10 +391,10 @@ mod tests {
 
     #[test]
     fn new_node_test() {
-        let mut node = Node::new("mpd".to_string());
+        let mut node = Node::new("mpd");
         assert_eq!(node.name(), "mpd");
-        node.append_child("child1".to_string());
-        node.append_child("child2".to_string());
+        node.append_child("child1");
+        node.append_child("child2");
 
         {
             let c1 = node.first_child().unwrap();
@@ -407,7 +407,7 @@ mod tests {
             assert_eq!(node.name(), "mpd");
         }
 
-        node.prepend_child("child0".to_string());
+        node.prepend_child("child0");
 
         {
             let c1 = node.first_child().unwrap();
@@ -415,7 +415,7 @@ mod tests {
         }
 
         node.append_child_by_type(NodeType::PcData)
-            .set_value("text1".to_string());
+            .set_value("text1");
 
         {
             let txt = node.last_child().unwrap();
@@ -425,10 +425,9 @@ mod tests {
 
     #[test]
     fn function_chain_test() {
-        let mut node = Node::new("mpd".to_string());
+        let mut node = Node::new("mpd");
         assert_eq!(node.name(), "mpd");
-        node.append_child("child1".to_string())
-            .set_value("value1".to_string());
+        node.append_child("child1").set_value("value1");
 
         let c1 = node.first_child().unwrap();
         assert_eq!(c1.name(), "child1");
@@ -437,15 +436,15 @@ mod tests {
 
     #[test]
     fn new_attribute_test() {
-        let mut attr = Attribute::new("class".to_string(), "test".to_string());
+        let mut attr = Attribute::new("class", "test");
 
         //borrow_mut
         {
             assert_eq!(attr.name(), "class");
             assert_eq!(attr.value(), "test");
 
-            attr.set_name("id".to_string());
-            attr.set_value("main".to_string());
+            attr.set_name("id");
+            attr.set_value("main");
         }
     }
 }

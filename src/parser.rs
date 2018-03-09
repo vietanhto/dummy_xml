@@ -114,7 +114,7 @@ pub fn parse_string(contents: &String) -> Result<Document, ParseXmlError> {
 }
 
 pub fn parse(contents: &[u8]) -> Result<Document, ParseXmlError> {
-    let mut root: Box<Node> = Node::new("".to_string());
+    let mut root: Box<Node> = Node::new("");
 
     let result = panic::catch_unwind(move || {
         parse_internal(contents, root.borrow_mut());
@@ -287,7 +287,7 @@ mod tests {
         assert_eq!(root.name(), "note");
         assert_eq!(
             root.first_attribute().unwrap(),
-            Attribute::new("id".to_string(), "1".to_string()).borrow()
+            Attribute::new("id", "1").borrow()
         );
         assert_eq!(root.parent().is_none(), true);
 
@@ -301,7 +301,7 @@ mod tests {
         assert_eq!(second.name(), "from");
         assert_eq!(
             second.first_attribute().unwrap(),
-            Attribute::new("value".to_string(), "Jani".to_string()).borrow()
+            Attribute::new("value", "Jani").borrow()
         );
 
         let fourth = root.last_child().unwrap();
